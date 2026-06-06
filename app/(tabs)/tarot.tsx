@@ -9,11 +9,9 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
 
 import GradientBackground from '../../src/components/GradientBackground';
-import Card from '../../src/components/Card';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, GLOW } from '../../src/constants/theme';
+import { COLORS, TYPE, S, RADIUS, SCREEN_PADDING } from '../../src/constants/theme';
 import { TAROT_CARDS, TarotCard } from '../../src/data/tarot';
 import { getCardImage } from '../../src/data/tarot-images';
 import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
@@ -25,8 +23,7 @@ import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
 const STORAGE_KEY = '@inner_light/tarot_daily_pull';
 const FLIP_DURATION = 600;
 
-// Card image dimensions (Rider-Waite aspect ratio ~1:1.68)
-const CARD_IMAGE_WIDTH = 200;
+const CARD_IMAGE_WIDTH = 280;
 const CARD_IMAGE_HEIGHT = CARD_IMAGE_WIDTH * 1.68;
 
 interface DailyPullRecord {
@@ -36,16 +33,6 @@ interface DailyPullRecord {
 }
 
 type ReadingMode = 'guidance' | 'yesno';
-
-// ---------------------------------------------------------------------------
-// Yes/No/Maybe badge colors (dark mode friendly)
-// ---------------------------------------------------------------------------
-
-const YES_NO_COLORS = {
-  yes: { bg: 'rgba(16,185,129,0.15)', text: '#10B981', label: 'Yes' },
-  no: { bg: 'rgba(239,68,68,0.15)', text: '#EF4444', label: 'No' },
-  maybe: { bg: 'rgba(212,165,116,0.15)', text: '#D4A574', label: 'Maybe' },
-} as const;
 
 // ---------------------------------------------------------------------------
 // Component
@@ -61,7 +48,6 @@ export default function TarotScreen() {
 
   // ---- animation ----
   const flipAnim = useRef(new Animated.Value(0)).current;
-  const buttonScale = useRef(new Animated.Value(1)).current;
 
   const backRotateY = flipAnim.interpolate({
     inputRange: [0, 0.5, 1],
@@ -119,7 +105,6 @@ export default function TarotScreen() {
   const handleReveal = useCallback(() => {
     if (isRevealed) return;
 
-    // ~30% chance of reversal
     const reversed = Math.random() < 0.3;
     setIsReversed(reversed);
     setIsRevealed(true);
@@ -155,29 +140,23 @@ export default function TarotScreen() {
     }, 300);
   }, [flipAnim, persistPull]);
 
-  const handleButtonPressIn = useCallback(() => {
-    Animated.spring(buttonScale, {
-      toValue: 0.97,
-      damping: 15,
-      stiffness: 150,
-      mass: 1,
-      useNativeDriver: true,
-    }).start();
-  }, [buttonScale]);
-
-  const handleButtonPressOut = useCallback(() => {
-    Animated.spring(buttonScale, {
-      toValue: 1,
-      damping: 15,
-      stiffness: 150,
-      mass: 1,
-      useNativeDriver: true,
-    }).start();
-  }, [buttonScale]);
-
-  // ---- render helpers ----
-  const yesNoStyle = YES_NO_COLORS[card.yesNoMaybe];
+  // ---- derived ----
   const cardImageSource = getCardImage(card.id);
+
+  const yesNoAnswer = isReversed
+    ? card.yesNoMaybe === 'yes'
+      ? 'maybe'
+      : card.yesNoMaybe === 'no'
+      ? 'no'
+      : 'unlikely'
+    : card.yesNoMaybe;
+
+  const yesNoColor =
+    yesNoAnswer === 'yes'
+      ? COLORS.success
+      : yesNoAnswer === 'no'
+      ? COLORS.danger
+      : COLORS.accent;
 
   return (
     <GradientBackground>
@@ -185,58 +164,40 @@ export default function TarotScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Title */}
-        <Text style={styles.title}>Daily Guidance</Text>
-
-        {/* Reading Mode Toggle */}
-        <View style={styles.modeToggleRow}>
+        {/* mode toggle */}
+        <View style={styles.modeToggle}>
           <Pressable
             onPress={() => setReadingMode('guidance')}
-            style={[
-              styles.modeToggleButton,
-              readingMode === 'guidance' && styles.modeToggleActive,
-            ]}
+            hitSlop={8}
           >
-            <Ionicons
-              name="compass-outline"
-              size={16}
-              color={readingMode === 'guidance' ? '#FFFFFF' : COLORS.foregroundMuted}
-            />
             <Text
               style={[
-                styles.modeToggleText,
-                readingMode === 'guidance' && styles.modeToggleTextActive,
+                styles.modeText,
+                readingMode === 'guidance' && styles.modeTextActive,
               ]}
             >
-              Guidance
+              guidance
             </Text>
           </Pressable>
+          <Text style={styles.modeDot}>{'  ·  '}</Text>
           <Pressable
             onPress={() => setReadingMode('yesno')}
-            style={[
-              styles.modeToggleButton,
-              readingMode === 'yesno' && styles.modeToggleActive,
-            ]}
+            hitSlop={8}
           >
-            <Ionicons
-              name="help-circle-outline"
-              size={16}
-              color={readingMode === 'yesno' ? '#FFFFFF' : COLORS.foregroundMuted}
-            />
             <Text
               style={[
-                styles.modeToggleText,
-                readingMode === 'yesno' && styles.modeToggleTextActive,
+                styles.modeText,
+                readingMode === 'yesno' && styles.modeTextActive,
               ]}
             >
-              Yes / No
+              yes / no
             </Text>
           </Pressable>
         </View>
 
-        {/* Card Area */}
+        {/* card area */}
         <View style={styles.cardContainer}>
-          {/* Back face */}
+          {/* back face — unrevealed */}
           <Animated.View
             pointerEvents={isRevealed ? 'none' : 'auto'}
             style={[
@@ -247,24 +208,12 @@ export default function TarotScreen() {
               },
             ]}
           >
-            <Pressable onPress={handleReveal} style={styles.pressable}>
-              <View style={styles.cardBack}>
-                <View style={styles.cardBackOrnate}>
-                  <View style={styles.cardBackInner}>
-                    <View style={styles.sparkleGlow}>
-                      <Ionicons name="sparkles" size={64} color={COLORS.accent} />
-                    </View>
-                    <Text style={styles.tapHint}>Tap to Reveal</Text>
-                    {readingMode === 'yesno' && (
-                      <Text style={styles.tapSubHint}>Ask your question first</Text>
-                    )}
-                  </View>
-                </View>
-              </View>
+            <Pressable onPress={handleReveal} style={styles.unrevealed}>
+              <Text style={styles.tapText}>tap</Text>
             </Pressable>
           </Animated.View>
 
-          {/* Front face */}
+          {/* front face — revealed */}
           <Animated.View
             pointerEvents={isRevealed ? 'auto' : 'none'}
             style={[
@@ -276,111 +225,91 @@ export default function TarotScreen() {
               },
             ]}
           >
-            <Card style={styles.cardFront}>
-              {/* Rider-Waite Card Image */}
-              <View style={styles.cardImageContainer}>
-                <View style={[styles.cardImageFrame, isReversed && styles.cardImageReversed]}>
-                  <Image
-                    source={cardImageSource}
-                    style={styles.cardImage}
-                    resizeMode="contain"
-                  />
-                </View>
+            <View style={styles.revealedContent}>
+              {/* hero card image */}
+              <View style={styles.imageWrap}>
+                <Image
+                  source={cardImageSource}
+                  style={[
+                    styles.cardImage,
+                    isReversed && { transform: [{ rotate: '180deg' }] },
+                  ]}
+                  resizeMode="contain"
+                />
               </View>
 
-              {/* Card Name */}
+              {/* card name */}
               <Text style={styles.cardName}>
                 {card.name}
-                {isReversed ? ' (Reversed)' : ''}
+                {isReversed && (
+                  <Text style={styles.reversedSuffix}>{' (reversed)'}</Text>
+                )}
               </Text>
 
-              {/* Astrology correspondence */}
-              <View style={styles.astrologyBadge}>
-                <Ionicons name="planet-outline" size={14} color={COLORS.foregroundMuted} />
-                <Text style={styles.astrologyText}>{card.astrology}</Text>
-              </View>
+              {/* astrology */}
+              <Text style={styles.astrology}>{card.astrology}</Text>
 
-              {/* Yes/No mode: answer badge */}
+              {/* yes/no answer */}
               {readingMode === 'yesno' && (
-                <View style={[styles.yesNoBadge, { backgroundColor: yesNoStyle.bg }]}>
-                  <Text style={[styles.yesNoText, { color: yesNoStyle.text }]}>
-                    {isReversed
-                      ? card.yesNoMaybe === 'yes'
-                        ? 'Maybe'
-                        : card.yesNoMaybe === 'no'
-                        ? 'No'
-                        : 'Unlikely'
-                      : yesNoStyle.label}
-                  </Text>
-                  {isReversed && card.yesNoMaybe === 'yes' && (
-                    <Text style={[styles.yesNoSubtext, { color: yesNoStyle.text }]}>
-                      Reversed energy clouds the outcome
-                    </Text>
-                  )}
-                </View>
+                <Text style={[styles.yesNoAnswer, { color: yesNoColor }]}>
+                  {yesNoAnswer}
+                </Text>
               )}
 
-              {/* Keywords as pills */}
-              <View style={styles.keywordsRow}>
-                {card.keywords.map((kw) => (
-                  <View key={kw} style={styles.keywordTag}>
-                    <Text style={styles.keywordText}>{kw}</Text>
-                  </View>
-                ))}
-              </View>
-
-              {/* Meaning */}
-              <Text style={styles.sectionLabel}>
-                {isReversed ? 'Upright Meaning' : 'Meaning'}
-              </Text>
-              <Text style={styles.meaningText}>{card.meaning}</Text>
-
-              {/* Reversed Meaning */}
-              {isReversed && (
+              {/* guidance content — skip for yesno mode */}
+              {readingMode === 'guidance' && (
                 <>
-                  <Text style={[styles.sectionLabel, styles.reversedLabel]}>
-                    Reversed Meaning
+                  {/* keywords */}
+                  <Text style={styles.keywords}>
+                    {card.keywords.join(', ')}
                   </Text>
-                  <View style={styles.reversedMeaningContainer}>
-                    <Text style={styles.meaningText}>{card.reversed}</Text>
+
+                  {/* meaning */}
+                  <View style={styles.sectionBlock}>
+                    <Text style={styles.sectionLabel}>meaning</Text>
+                    <Text style={styles.bodyText}>{card.meaning}</Text>
+                  </View>
+
+                  {/* reversed meaning */}
+                  {isReversed && (
+                    <View style={styles.sectionBlock}>
+                      <Text style={styles.sectionLabel}>reversed</Text>
+                      <View style={styles.reversedBlock}>
+                        <Text style={styles.bodyText}>{card.reversed}</Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* guidance */}
+                  <View style={styles.sectionBlock}>
+                    <Text style={styles.sectionLabel}>guidance</Text>
+                    <Text style={styles.guidanceText}>
+                      {isReversed
+                        ? `in reverse: ${card.reversed.split('.')[0]}. reflect on what may be blocked or out of balance.`
+                        : card.guidance}
+                    </Text>
+                  </View>
+
+                  {/* shuffle link */}
+                  <View style={styles.shuffleWrap}>
+                    <Pressable onPress={handleNewReading} hitSlop={12}>
+                      <Text style={styles.shuffleText}>shuffle</Text>
+                    </Pressable>
                   </View>
                 </>
               )}
 
-              {/* Guidance */}
-              <Text style={styles.sectionLabel}>Guidance</Text>
-              <Text style={styles.guidanceText}>
-                {isReversed
-                  ? `In reverse: ${card.reversed.split('.')[0]}. Reflect on what may be blocked or out of balance.`
-                  : card.guidance}
-              </Text>
-            </Card>
+              {/* shuffle link for yesno mode */}
+              {readingMode === 'yesno' && (
+                <View style={styles.shuffleWrap}>
+                  <Pressable onPress={handleNewReading} hitSlop={12}>
+                    <Text style={styles.shuffleText}>shuffle</Text>
+                  </Pressable>
+                </View>
+              )}
+            </View>
           </Animated.View>
         </View>
-
-        {/* New Reading Button */}
-        {isRevealed && (
-          <Pressable
-            onPress={handleNewReading}
-            onPressIn={handleButtonPressIn}
-            onPressOut={handleButtonPressOut}
-          >
-            <Animated.View
-              style={[
-                styles.newReadingButton,
-                { transform: [{ scale: buttonScale }] },
-              ]}
-            >
-              <Ionicons
-                name="shuffle-outline"
-                size={20}
-                color="#FFFFFF"
-                style={styles.buttonIcon}
-              />
-              <Text style={styles.newReadingText}>New Reading</Text>
-            </Animated.View>
-          </Pressable>
-        )}
       </ScrollView>
     </GradientBackground>
   );
@@ -393,70 +322,44 @@ export default function TarotScreen() {
 const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 20,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xxl,
-    alignItems: 'center',
+    paddingHorizontal: SCREEN_PADDING,
+    paddingTop: S.md,
+    paddingBottom: S.xxl,
   },
 
-  // ---- Title ----
-  title: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes['2xl'],
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.foreground,
-    marginBottom: SPACING.md,
-    textAlign: 'center',
-  },
-
-  // ---- Mode toggle ----
-  modeToggleRow: {
+  // ---- mode toggle ----
+  modeToggle: {
     flexDirection: 'row',
-    backgroundColor: COLORS.bgCard,
-    borderRadius: BORDER_RADIUS.full,
-    padding: 4,
-    marginBottom: SPACING.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-  },
-
-  modeToggleButton: {
-    flexDirection: 'row',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.full,
-    gap: 6,
+    marginBottom: S.xl,
     minHeight: 44,
   },
-
-  modeToggleActive: {
-    backgroundColor: COLORS.primary,
+  modeText: {
+    ...TYPE.muted,
+    fontSize: 14,
+    minHeight: 44,
+    textAlignVertical: 'center',
+    lineHeight: 44,
+  },
+  modeTextActive: {
+    color: COLORS.fg,
+    textDecorationLine: 'underline',
+  },
+  modeDot: {
+    ...TYPE.muted,
+    fontSize: 14,
   },
 
-  modeToggleText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.foregroundMuted,
-  },
-
-  modeToggleTextActive: {
-    color: '#FFFFFF',
-  },
-
-  // ---- Card container ----
+  // ---- card container ----
   cardContainer: {
     width: '100%',
-    minHeight: 420,
-    marginBottom: SPACING.lg,
+    flex: 1,
   },
-
   cardFace: {
     width: '100%',
     backfaceVisibility: 'hidden',
   },
-
   cardFaceAbsolute: {
     position: 'absolute',
     top: 0,
@@ -464,238 +367,112 @@ const styles = StyleSheet.create({
     right: 0,
   },
 
-  pressable: {
-    width: '100%',
-    minHeight: 44,
-  },
-
-  // ---- Back of card ----
-  cardBack: {
-    backgroundColor: COLORS.bgCard,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.accent,
-    minHeight: 400,
+  // ---- unrevealed state ----
+  unrevealed: {
+    flex: 1,
+    minHeight: 500,
     alignItems: 'center',
     justifyContent: 'center',
-    ...GLOW.accentGlow,
+  },
+  tapText: {
+    ...TYPE.muted,
+    fontSize: 14,
+    textAlign: 'center',
   },
 
-  cardBackOrnate: {
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: 'rgba(212,165,116,0.25)',
-    padding: SPACING.xl,
-    margin: SPACING.md,
-  },
-
-  cardBackInner: {
+  // ---- revealed content ----
+  revealedContent: {
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.md,
   },
 
-  sparkleGlow: {
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-  },
-
-  tapHint: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.foregroundMuted,
-    marginTop: SPACING.sm,
-  },
-
-  tapSubHint: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    color: COLORS.foregroundMuted,
-    opacity: 0.7,
-    fontStyle: 'italic',
-  },
-
-  // ---- Front of card ----
-  cardFront: {
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.lg,
-    paddingHorizontal: SPACING.lg,
-  },
-
-  // ---- Card Image ----
-  cardImageContainer: {
+  // ---- hero image ----
+  imageWrap: {
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    marginBottom: S.xl,
   },
-
-  cardImageFrame: {
-    borderRadius: BORDER_RADIUS.sm,
-    overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(212,165,116,0.3)',
-    shadowColor: COLORS.accent,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-  },
-
-  cardImageReversed: {
-    transform: [{ rotate: '180deg' }],
-  },
-
   cardImage: {
     width: CARD_IMAGE_WIDTH,
     height: CARD_IMAGE_HEIGHT,
+    borderRadius: RADIUS.sm,
   },
 
-  // ---- Card Name ----
+  // ---- card name ----
   cardName: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.xl,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.accent,
+    ...TYPE.accent,
+    fontSize: 28,
     textAlign: 'center',
-    marginBottom: SPACING.sm,
+    marginBottom: S.xs,
+  },
+  reversedSuffix: {
+    ...TYPE.muted,
+    fontSize: 28,
+    fontFamily: TYPE.accent.fontFamily,
   },
 
-  // ---- Astrology badge ----
-  astrologyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 6,
-    backgroundColor: COLORS.surface,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    marginBottom: SPACING.md,
-  },
-
-  astrologyText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.foregroundMuted,
+  // ---- astrology ----
+  astrology: {
+    ...TYPE.muted,
+    fontSize: 13,
     fontStyle: 'italic',
+    textAlign: 'center',
+    marginBottom: S.lg,
   },
 
-  // ---- Yes/No badge ----
-  yesNoBadge: {
-    alignSelf: 'center',
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.md,
-    borderRadius: BORDER_RADIUS.lg,
-    marginBottom: SPACING.md,
-    alignItems: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
+  // ---- yes/no answer ----
+  yesNoAnswer: {
+    ...TYPE.heading,
+    fontSize: 40,
+    textAlign: 'center',
+    marginTop: S.md,
+    marginBottom: S.lg,
   },
 
-  yesNoText: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.xl,
-    fontWeight: TYPOGRAPHY.weights.bold,
+  // ---- keywords ----
+  keywords: {
+    ...TYPE.muted,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 32,
   },
 
-  yesNoSubtext: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.xs,
-    marginTop: 4,
-    opacity: 0.8,
+  // ---- sections ----
+  sectionBlock: {
+    width: '100%',
+    marginBottom: S.lg,
   },
-
-  // ---- Keywords ----
-  keywordsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.lg,
-  },
-
-  keywordTag: {
-    backgroundColor: COLORS.surface,
-    borderRadius: BORDER_RADIUS.full,
-    paddingHorizontal: 12,
-    paddingVertical: SPACING.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-  },
-
-  keywordText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.secondary,
-  },
-
-  // ---- Section labels ----
   sectionLabel: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.accent,
-    marginBottom: SPACING.xs,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
+    ...TYPE.muted,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginBottom: S.sm,
   },
-
-  reversedLabel: {
-    color: COLORS.destructive,
+  bodyText: {
+    ...TYPE.body,
+    fontSize: 16,
+    lineHeight: 26,
   },
-
-  meaningText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foreground,
-    lineHeight: TYPOGRAPHY.sizes.base * TYPOGRAPHY.lineHeights.relaxed,
-    marginBottom: SPACING.md,
+  reversedBlock: {
+    borderLeftWidth: 1,
+    borderLeftColor: COLORS.border,
+    paddingLeft: S.md,
   },
-
-  reversedMeaningContainer: {
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.accent,
-    paddingLeft: SPACING.md,
-  },
-
   guidanceText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foreground,
-    lineHeight: TYPOGRAPHY.sizes.base * TYPOGRAPHY.lineHeights.relaxed,
+    ...TYPE.body,
+    fontSize: 16,
+    lineHeight: 26,
     fontStyle: 'italic',
   },
 
-  // ---- New Reading button ----
-  newReadingButton: {
-    flexDirection: 'row',
+  // ---- shuffle ----
+  shuffleWrap: {
     alignItems: 'center',
+    marginTop: 48,
+    minHeight: 44,
     justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: BORDER_RADIUS.full,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xl,
-    minHeight: 48,
-    minWidth: 44,
-    marginTop: SPACING.sm,
-    ...GLOW.primaryGlow,
   },
-
-  buttonIcon: {
-    marginRight: SPACING.sm,
-  },
-
-  newReadingText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: '#FFFFFF',
+  shuffleText: {
+    ...TYPE.muted,
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
 });
