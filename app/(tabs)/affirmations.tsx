@@ -111,19 +111,61 @@ export default function AffirmationsScreen() {
           />
         </View>
 
-        {/* page indicator + counter */}
-        <View style={styles.bottomSection}>
-          <Text style={styles.pageIndicator}>
-            {activeIndex + 1} / {affirmations.length}
-          </Text>
-          {categoryAffirmedCount > 0 && (
-            <View style={styles.counterPill}>
-              <Ionicons name="checkmark-circle" size={14} color={COLORS.accent} />
-              <Text style={styles.counterText}>
-                {categoryAffirmedCount} affirmed
-              </Text>
-            </View>
-          )}
+        {/* navigation arrows + page indicator */}
+        <View style={styles.navRow}>
+          <Pressable
+            onPress={() => {
+              if (activeIndex > 0) {
+                flatListRef.current?.scrollToOffset({
+                  offset: (activeIndex - 1) * SCREEN_WIDTH,
+                  animated: true,
+                });
+              }
+            }}
+            style={[styles.navArrow, activeIndex === 0 && styles.navArrowDisabled]}
+            hitSlop={12}
+            disabled={activeIndex === 0}
+          >
+            <Ionicons
+              name="chevron-back"
+              size={22}
+              color={activeIndex === 0 ? COLORS.border : COLORS.fgSecondary}
+            />
+          </Pressable>
+
+          <View style={styles.navCenter}>
+            <Text style={styles.pageIndicator}>
+              {activeIndex + 1} / {affirmations.length}
+            </Text>
+            {categoryAffirmedCount > 0 && (
+              <View style={styles.counterPill}>
+                <Ionicons name="checkmark-circle" size={14} color={COLORS.accent} />
+                <Text style={styles.counterText}>
+                  {categoryAffirmedCount} affirmed
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <Pressable
+            onPress={() => {
+              if (activeIndex < affirmations.length - 1) {
+                flatListRef.current?.scrollToOffset({
+                  offset: (activeIndex + 1) * SCREEN_WIDTH,
+                  animated: true,
+                });
+              }
+            }}
+            style={[styles.navArrow, activeIndex >= affirmations.length - 1 && styles.navArrowDisabled]}
+            hitSlop={12}
+            disabled={activeIndex >= affirmations.length - 1}
+          >
+            <Ionicons
+              name="chevron-forward"
+              size={22}
+              color={activeIndex >= affirmations.length - 1 ? COLORS.border : COLORS.fgSecondary}
+            />
+          </Pressable>
         </View>
       </View>
     </GradientBackground>
@@ -434,12 +476,31 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
 
-  // -- bottom --
-  bottomSection: {
+  // -- navigation --
+  navRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: S.lg,
+    justifyContent: 'space-between',
+    paddingHorizontal: SCREEN_PADDING,
     paddingTop: S.md,
-    gap: S.sm,
+    paddingBottom: S.lg,
+  },
+  navArrow: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navArrowDisabled: {
+    opacity: 0.3,
+  },
+  navCenter: {
+    alignItems: 'center',
+    gap: S.xs,
   },
   pageIndicator: {
     fontFamily: TYPE.secondary.fontFamily,
