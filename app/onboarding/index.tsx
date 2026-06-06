@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 
-import { COLORS, TYPE, S, SCREEN_PADDING } from '../../src/constants/theme';
+import { COLORS, TYPE, S, SCREEN_PADDING, SURFACE, BUTTON, RADIUS } from '../../src/constants/theme';
 import GradientBackground from '../../src/components/GradientBackground';
 import { useIdentity, UserIdentity } from '../../src/hooks/useIdentity';
 
@@ -46,7 +46,7 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
             styles.stepDot,
             {
               backgroundColor:
-                i === currentStep ? COLORS.fg : COLORS.muted,
+                i === currentStep ? COLORS.accent : COLORS.fgSecondary,
             },
           ]}
         />
@@ -144,9 +144,9 @@ export default function OnboardingScreen() {
               <View style={{ height: S.xl + S.sm }} />
 
               <TextInput
-                style={styles.hairlineInput}
+                style={styles.visibleInput}
                 placeholder="your name"
-                placeholderTextColor={COLORS.muted}
+                placeholderTextColor={COLORS.fgSecondary}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -157,9 +157,9 @@ export default function OnboardingScreen() {
               <View style={{ height: S.lg }} />
 
               <TextInput
-                style={[styles.hairlineInput, styles.intentionInput]}
+                style={[styles.visibleInput, styles.intentionInput]}
                 placeholder="i want to become..."
-                placeholderTextColor={COLORS.muted}
+                placeholderTextColor={COLORS.fgSecondary}
                 value={intention}
                 onChangeText={setIntention}
                 multiline
@@ -172,16 +172,13 @@ export default function OnboardingScreen() {
               <Pressable
                 onPress={handleNext}
                 disabled={!canProceedStep0}
+                style={[
+                  BUTTON.ghost,
+                  !canProceedStep0 && styles.buttonDisabled,
+                ]}
                 hitSlop={12}
               >
-                <Text
-                  style={[
-                    styles.actionLink,
-                    !canProceedStep0 && styles.actionLinkDisabled,
-                  ]}
-                >
-                  next
-                </Text>
+                <Text style={BUTTON.ghostText}>next</Text>
               </Pressable>
             </View>
           </View>
@@ -199,30 +196,33 @@ export default function OnboardingScreen() {
               <View style={{ height: S.xl }} />
 
               <View style={styles.goalsWrap}>
-                {GOAL_OPTIONS.map((goal, i) => (
-                  <React.Fragment key={goal}>
+                {GOAL_OPTIONS.map((goal) => {
+                  const selected = selectedGoals.includes(goal);
+                  return (
                     <Pressable
+                      key={goal}
                       onPress={() => toggleGoal(goal)}
-                      hitSlop={8}
+                      style={[
+                        styles.goalChip,
+                        selected ? styles.goalChipSelected : styles.goalChipInactive,
+                      ]}
+                      hitSlop={4}
                     >
                       <Text
                         style={[
-                          styles.goalText,
+                          styles.goalChipText,
                           {
-                            color: selectedGoals.includes(goal)
-                              ? COLORS.fg
-                              : COLORS.muted,
+                            color: selected
+                              ? COLORS.accent
+                              : COLORS.fgSecondary,
                           },
                         ]}
                       >
                         {goal}
                       </Text>
                     </Pressable>
-                    {i < GOAL_OPTIONS.length - 1 && (
-                      <Text style={styles.goalSeparator}>  ·  </Text>
-                    )}
-                  </React.Fragment>
-                ))}
+                  );
+                })}
               </View>
             </View>
 
@@ -230,16 +230,13 @@ export default function OnboardingScreen() {
               <Pressable
                 onPress={handleNext}
                 disabled={!canProceedStep1}
+                style={[
+                  BUTTON.ghost,
+                  !canProceedStep1 && styles.buttonDisabled,
+                ]}
                 hitSlop={12}
               >
-                <Text
-                  style={[
-                    styles.actionLink,
-                    !canProceedStep1 && styles.actionLinkDisabled,
-                  ]}
-                >
-                  next
-                </Text>
+                <Text style={BUTTON.ghostText}>next</Text>
               </Pressable>
             </View>
           </View>
@@ -260,8 +257,12 @@ export default function OnboardingScreen() {
 
               <View style={{ height: S.xxl }} />
 
-              <Pressable onPress={handleBegin} hitSlop={12}>
-                <Text style={styles.beginText}>begin</Text>
+              <Pressable
+                onPress={handleBegin}
+                style={BUTTON.primary}
+                hitSlop={12}
+              >
+                <Text style={BUTTON.primaryText}>begin</Text>
               </Pressable>
             </View>
           </View>
@@ -358,16 +359,19 @@ const styles = StyleSheet.create({
     lineHeight: 40,
   },
 
-  // -- Inputs --
+  // -- Inputs (visible fields with surface bg + border) --
 
-  hairlineInput: {
+  visibleInput: {
     ...TYPE.body,
     fontSize: 18,
     color: COLORS.fg,
     textAlign: 'center',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.muted,
+    backgroundColor: COLORS.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.md,
     paddingVertical: S.sm,
+    paddingHorizontal: S.md,
     width: '100%',
     minHeight: 44,
   },
@@ -376,26 +380,41 @@ const styles = StyleSheet.create({
     minHeight: 64,
   },
 
-  // -- Goals --
+  // -- Goals (chip layout) --
 
   goalsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
     alignItems: 'center',
+    gap: S.sm,
     paddingHorizontal: S.md,
   },
 
-  goalText: {
-    ...TYPE.body,
-    fontSize: 16,
-    lineHeight: 32,
+  goalChip: {
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
   },
 
-  goalSeparator: {
-    ...TYPE.muted,
-    fontSize: 16,
-    lineHeight: 32,
+  goalChipSelected: {
+    backgroundColor: COLORS.accentSoft,
+    borderColor: COLORS.accentBorder,
+  },
+
+  goalChipInactive: {
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
+  },
+
+  goalChipText: {
+    ...TYPE.body,
+    fontSize: 14,
+    lineHeight: 20,
   },
 
   // -- Bottom action --
@@ -405,16 +424,7 @@ const styles = StyleSheet.create({
     paddingBottom: S.xxl,
   },
 
-  actionLink: {
-    ...TYPE.muted,
-    fontSize: 14,
-    textDecorationLine: 'underline',
-    minHeight: 44,
-    textAlignVertical: 'center',
-    lineHeight: 44,
-  },
-
-  actionLinkDisabled: {
+  buttonDisabled: {
     opacity: 0.3,
   },
 
@@ -428,7 +438,7 @@ const styles = StyleSheet.create({
   },
 
   goalsDisplay: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 22,
