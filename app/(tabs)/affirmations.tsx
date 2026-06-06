@@ -9,13 +9,14 @@ import {
   Text,
   View,
 } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { COLORS, TYPE, S, SCREEN_PADDING, RADIUS } from '../../src/constants/theme';
+import { COLORS, TYPE, S, SCREEN_PADDING, RADIUS, BUTTON } from '../../src/constants/theme';
 import { AFFIRMATION_CATEGORIES, Affirmation } from '../../src/data/affirmations';
 import GradientBackground from '../../src/components/GradientBackground';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const HOLD_DURATION = 500;
+const HOLD_DURATION = 600;
 
 export default function AffirmationsScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(AFFIRMATION_CATEGORIES[0].id);
@@ -110,19 +111,19 @@ export default function AffirmationsScreen() {
           />
         </View>
 
-        {/* page indicator */}
-        <Text style={styles.pageIndicator}>
-          {activeIndex + 1} / {affirmations.length}
-        </Text>
-
-        {/* bottom section */}
+        {/* page indicator + counter */}
         <View style={styles.bottomSection}>
+          <Text style={styles.pageIndicator}>
+            {activeIndex + 1} / {affirmations.length}
+          </Text>
           {categoryAffirmedCount > 0 && (
-            <Text style={styles.affirmedCount}>
-              {categoryAffirmedCount} affirmed
-            </Text>
+            <View style={styles.counterPill}>
+              <Ionicons name="checkmark-circle" size={14} color={COLORS.accent} />
+              <Text style={styles.counterText}>
+                {categoryAffirmedCount} affirmed
+              </Text>
+            </View>
           )}
-          <Text style={styles.holdHint}>hold to affirm</Text>
         </View>
       </View>
     </GradientBackground>
@@ -130,7 +131,7 @@ export default function AffirmationsScreen() {
 }
 
 // ---------------------------------------------------------------------------
-// AffirmationPage — single full-width page with long-press gold flash
+// AffirmationPage — with visible affirm button + clear affirmed state
 // ---------------------------------------------------------------------------
 
 interface AffirmationPageProps {
@@ -140,32 +141,69 @@ interface AffirmationPageProps {
 }
 
 function AffirmationPage({ affirmation, isAffirmed, onAffirm }: AffirmationPageProps) {
-  const colorAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const progressAnim = useRef(new Animated.Value(0)).current;
+  const checkAnim = useRef(new Animated.Value(0)).current;
   const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const progressRef = useRef<Animated.CompositeAnimation | null>(null);
 
-  const textColor = colorAnim.interpolate({
+  // Progress bar width for hold feedback
+  const progressWidth = progressAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [COLORS.fg, COLORS.accent],
+    outputRange: ['0%', '100%'],
+  });
+
+  // Checkmark animation
+  const checkOpacity = checkAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+  });
+  const checkScale = checkAnim.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0.5, 1.2, 1],
   });
 
   const handlePressIn = () => {
     if (isAffirmed) return;
 
+    // Scale card down slightly
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      damping: 15,
+      stiffness: 150,
+      mass: 1,
+      useNativeDriver: true,
+    }).start();
+
+    // Fill progress bar
+    progressRef.current = Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: HOLD_DURATION,
+      useNativeDriver: false,
+    });
+    progressRef.current.start();
+
+    // Trigger affirm after hold
     holdTimer.current = setTimeout(() => {
       onAffirm();
-      // flash to gold then back
-      Animated.sequence([
-        Animated.timing(colorAnim, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: false,
-        }),
-        Animated.timing(colorAnim, {
-          toValue: 0,
-          duration: 600,
-          useNativeDriver: false,
-        }),
-      ]).start();
+
+      // Show checkmark with bounce
+      Animated.spring(checkAnim, {
+        toValue: 1,
+        damping: 12,
+        stiffness: 200,
+        mass: 0.8,
+        useNativeDriver: true,
+      }).start();
+
+      // Release scale
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        damping: 15,
+        stiffness: 150,
+        mass: 1,
+        useNativeDriver: true,
+      }).start();
     }, HOLD_DURATION);
   };
 
@@ -174,28 +212,89 @@ function AffirmationPage({ affirmation, isAffirmed, onAffirm }: AffirmationPageP
       clearTimeout(holdTimer.current);
       holdTimer.current = null;
     }
+    if (progressRef.current) {
+      progressRef.current.stop();
+    }
+    // Reset if not affirmed
+    if (!isAffirmed) {
+      Animated.timing(progressAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: false,
+      }).start();
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        damping: 15,
+        stiffness: 150,
+        mass: 1,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   return (
-    <Pressable
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={styles.page}
-      accessibilityRole="button"
-      accessibilityLabel={`${affirmation.text}. ${isAffirmed ? 'Affirmed' : 'Hold to affirm'}`}
-      accessibilityHint={isAffirmed ? undefined : 'Long press to affirm'}
-    >
+    <View style={styles.page}>
       <View style={styles.pageContent}>
-        <Animated.Text
+        {/* Affirmation text */}
+        <Text
           style={[
             styles.affirmationText,
-            { color: textColor },
+            isAffirmed && styles.affirmationTextAffirmed,
           ]}
         >
           {affirmation.text}
-        </Animated.Text>
+        </Text>
+
+        {/* Affirmed checkmark overlay */}
+        {isAffirmed && (
+          <Animated.View
+            style={[
+              styles.checkmarkWrap,
+              {
+                opacity: checkOpacity,
+                transform: [{ scale: checkScale }],
+              },
+            ]}
+          >
+            <View style={styles.checkmarkCircle}>
+              <Ionicons name="checkmark" size={28} color={COLORS.bg} />
+            </View>
+            <Text style={styles.affirmedLabel}>affirmed</Text>
+          </Animated.View>
+        )}
+
+        {/* Affirm button — only when NOT affirmed */}
+        {!isAffirmed && (
+          <Pressable
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            style={styles.affirmButtonWrap}
+            accessibilityRole="button"
+            accessibilityLabel={`Hold to affirm: ${affirmation.text}`}
+            accessibilityHint="Long press to affirm"
+          >
+            <Animated.View
+              style={[
+                styles.affirmButton,
+                { transform: [{ scale: scaleAnim }] },
+              ]}
+            >
+              {/* Progress fill bar */}
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  { width: progressWidth },
+                ]}
+              />
+              <View style={styles.affirmButtonContent}>
+                <Ionicons name="heart-outline" size={18} color={COLORS.accent} />
+                <Text style={styles.affirmButtonText}>hold to affirm</Text>
+              </View>
+            </Animated.View>
+          </Pressable>
+        )}
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -212,7 +311,7 @@ const styles = StyleSheet.create({
   // -- category selector --
   categoryScroll: {
     flexGrow: 0,
-    marginBottom: S.xl,
+    marginBottom: S.lg,
   },
   categoryRow: {
     paddingHorizontal: SCREEN_PADDING,
@@ -224,6 +323,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderWidth: StyleSheet.hairlineWidth,
+    minHeight: 44,
+    justifyContent: 'center',
   },
   categoryPillActive: {
     backgroundColor: COLORS.accentSoft,
@@ -254,47 +355,109 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    minHeight: 44,
-    minWidth: 44,
   },
   pageContent: {
-    justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SCREEN_PADDING,
+    paddingHorizontal: SCREEN_PADDING + S.md,
   },
+
+  // -- affirmation text --
   affirmationText: {
     fontFamily: TYPE.heading.fontFamily,
     fontSize: 24,
     color: COLORS.fg,
     textAlign: 'center',
     lineHeight: 38,
-    maxWidth: 300,
+    maxWidth: 320,
+  },
+  affirmationTextAffirmed: {
+    color: COLORS.accent,
   },
 
-  // -- page indicator --
-  pageIndicator: {
+  // -- affirm button --
+  affirmButtonWrap: {
+    marginTop: S.xl,
+    width: '100%',
+    maxWidth: 240,
+  },
+  affirmButton: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.accentBorder,
+    overflow: 'hidden',
+    minHeight: 52,
+    justifyContent: 'center',
+  },
+  progressFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: COLORS.accentSoft,
+    borderRadius: RADIUS.pill,
+  },
+  affirmButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: S.sm,
+    paddingVertical: 14,
+    paddingHorizontal: S.lg,
+  },
+  affirmButtonText: {
+    fontFamily: TYPE.body.fontFamily,
+    fontSize: 15,
+    fontWeight: '500',
+    color: COLORS.accent,
+    letterSpacing: 0.5,
+  },
+
+  // -- affirmed state --
+  checkmarkWrap: {
+    alignItems: 'center',
+    marginTop: S.xl,
+  },
+  checkmarkCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  affirmedLabel: {
     fontFamily: TYPE.secondary.fontFamily,
-    fontSize: 12,
-    color: COLORS.fgSecondary,
-    textAlign: 'center',
-    marginTop: S.md,
+    fontSize: 13,
+    color: COLORS.accent,
+    marginTop: S.sm,
+    letterSpacing: 1,
   },
 
   // -- bottom --
   bottomSection: {
     alignItems: 'center',
     paddingBottom: S.lg,
-    paddingTop: S.xl,
-    gap: S.xs,
+    paddingTop: S.md,
+    gap: S.sm,
   },
-  affirmedCount: {
+  pageIndicator: {
     fontFamily: TYPE.secondary.fontFamily,
     fontSize: 12,
     color: COLORS.fgSecondary,
   },
-  holdHint: {
+  counterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: S.xs,
+    backgroundColor: COLORS.accentSoft,
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: S.md,
+    paddingVertical: S.xs,
+  },
+  counterText: {
     fontFamily: TYPE.secondary.fontFamily,
-    fontSize: 13,
-    color: COLORS.fgSecondary,
+    fontSize: 12,
+    color: COLORS.accent,
   },
 });
