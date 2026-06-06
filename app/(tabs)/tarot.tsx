@@ -9,9 +9,18 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import GradientBackground from '../../src/components/GradientBackground';
-import { COLORS, TYPE, S, RADIUS, SCREEN_PADDING } from '../../src/constants/theme';
+import {
+  COLORS,
+  TYPE,
+  S,
+  RADIUS,
+  SURFACE,
+  BUTTON,
+  SCREEN_PADDING,
+} from '../../src/constants/theme';
 import { TAROT_CARDS, TarotCard } from '../../src/data/tarot';
 import { getCardImage } from '../../src/data/tarot-images';
 import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
@@ -23,8 +32,11 @@ import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
 const STORAGE_KEY = '@inner_light/tarot_daily_pull';
 const FLIP_DURATION = 600;
 
-const CARD_IMAGE_WIDTH = 280;
-const CARD_IMAGE_HEIGHT = CARD_IMAGE_WIDTH * 1.68;
+const CARD_WIDTH = 260;
+const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.68);
+
+const CARD_IMAGE_WIDTH = 260;
+const CARD_IMAGE_HEIGHT = Math.round(CARD_IMAGE_WIDTH * 1.68);
 
 interface DailyPullRecord {
   date: string;
@@ -91,15 +103,22 @@ export default function TarotScreen() {
     })();
   }, [flipAnim]);
 
-  const persistPull = useCallback(async (pulled: TarotCard, reversed: boolean) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const record: DailyPullRecord = { date: today, cardId: pulled.id, isReversed: reversed };
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(record));
-    } catch {
-      // silently ignore
-    }
-  }, []);
+  const persistPull = useCallback(
+    async (pulled: TarotCard, reversed: boolean) => {
+      try {
+        const today = new Date().toISOString().split('T')[0];
+        const record: DailyPullRecord = {
+          date: today,
+          cardId: pulled.id,
+          isReversed: reversed,
+        };
+        await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+      } catch {
+        // silently ignore
+      }
+    },
+    [],
+  );
 
   // ---- handlers ----
   const handleReveal = useCallback(() => {
@@ -147,16 +166,16 @@ export default function TarotScreen() {
     ? card.yesNoMaybe === 'yes'
       ? 'maybe'
       : card.yesNoMaybe === 'no'
-      ? 'no'
-      : 'unlikely'
+        ? 'no'
+        : 'unlikely'
     : card.yesNoMaybe;
 
   const yesNoColor =
     yesNoAnswer === 'yes'
       ? COLORS.success
       : yesNoAnswer === 'no'
-      ? COLORS.danger
-      : COLORS.accent;
+        ? COLORS.danger
+        : COLORS.accent;
 
   return (
     <GradientBackground>
@@ -164,30 +183,36 @@ export default function TarotScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* mode toggle */}
+        {/* ---- Mode Toggle ---- */}
         <View style={styles.modeToggle}>
           <Pressable
             onPress={() => setReadingMode('guidance')}
-            hitSlop={8}
+            style={[
+              styles.modePill,
+              readingMode === 'guidance' && styles.modePillActive,
+            ]}
           >
             <Text
               style={[
-                styles.modeText,
-                readingMode === 'guidance' && styles.modeTextActive,
+                styles.modePillText,
+                readingMode === 'guidance' && styles.modePillTextActive,
               ]}
             >
               guidance
             </Text>
           </Pressable>
-          <Text style={styles.modeDot}>{'  ·  '}</Text>
+          <View style={{ width: S.sm }} />
           <Pressable
             onPress={() => setReadingMode('yesno')}
-            hitSlop={8}
+            style={[
+              styles.modePill,
+              readingMode === 'yesno' && styles.modePillActive,
+            ]}
           >
             <Text
               style={[
-                styles.modeText,
-                readingMode === 'yesno' && styles.modeTextActive,
+                styles.modePillText,
+                readingMode === 'yesno' && styles.modePillTextActive,
               ]}
             >
               yes / no
@@ -195,9 +220,9 @@ export default function TarotScreen() {
           </Pressable>
         </View>
 
-        {/* card area */}
+        {/* ---- Card Area ---- */}
         <View style={styles.cardContainer}>
-          {/* back face — unrevealed */}
+          {/* Back face — unrevealed */}
           <Animated.View
             pointerEvents={isRevealed ? 'none' : 'auto'}
             style={[
@@ -208,12 +233,21 @@ export default function TarotScreen() {
               },
             ]}
           >
-            <Pressable onPress={handleReveal} style={styles.unrevealed}>
-              <Text style={styles.tapText}>tap</Text>
+            <Pressable onPress={handleReveal} style={styles.cardBackPressable}>
+              <View style={styles.cardBack}>
+                <Ionicons
+                  name="sparkles"
+                  size={48}
+                  color={COLORS.accent}
+                  style={styles.cardBackIcon}
+                />
+                <Text style={styles.cardBackTitle}>inner light</Text>
+                <Text style={styles.cardBackSubtitle}>tap to draw</Text>
+              </View>
             </Pressable>
           </Animated.View>
 
-          {/* front face — revealed */}
+          {/* Front face — revealed */}
           <Animated.View
             pointerEvents={isRevealed ? 'auto' : 'none'}
             style={[
@@ -226,7 +260,7 @@ export default function TarotScreen() {
             ]}
           >
             <View style={styles.revealedContent}>
-              {/* hero card image */}
+              {/* Hero card image */}
               <View style={styles.imageWrap}>
                 <Image
                   source={cardImageSource}
@@ -238,39 +272,39 @@ export default function TarotScreen() {
                 />
               </View>
 
-              {/* card name */}
+              {/* Card name */}
               <Text style={styles.cardName}>
                 {card.name}
                 {isReversed && (
-                  <Text style={styles.reversedSuffix}>{' (reversed)'}</Text>
+                  <Text style={styles.reversedSuffix}> reversed</Text>
                 )}
               </Text>
 
-              {/* astrology */}
+              {/* Astrology */}
               <Text style={styles.astrology}>{card.astrology}</Text>
 
-              {/* yes/no answer */}
+              {/* Yes/No answer */}
               {readingMode === 'yesno' && (
                 <Text style={[styles.yesNoAnswer, { color: yesNoColor }]}>
                   {yesNoAnswer}
                 </Text>
               )}
 
-              {/* guidance content — skip for yesno mode */}
+              {/* Guidance content */}
               {readingMode === 'guidance' && (
                 <>
-                  {/* keywords */}
+                  {/* Keywords */}
                   <Text style={styles.keywords}>
-                    {card.keywords.join(', ')}
+                    {card.keywords.join(' · ')}
                   </Text>
 
-                  {/* meaning */}
+                  {/* Meaning */}
                   <View style={styles.sectionBlock}>
                     <Text style={styles.sectionLabel}>meaning</Text>
                     <Text style={styles.bodyText}>{card.meaning}</Text>
                   </View>
 
-                  {/* reversed meaning */}
+                  {/* Reversed meaning */}
                   {isReversed && (
                     <View style={styles.sectionBlock}>
                       <Text style={styles.sectionLabel}>reversed</Text>
@@ -280,7 +314,7 @@ export default function TarotScreen() {
                     </View>
                   )}
 
-                  {/* guidance */}
+                  {/* Guidance */}
                   <View style={styles.sectionBlock}>
                     <Text style={styles.sectionLabel}>guidance</Text>
                     <Text style={styles.guidanceText}>
@@ -289,24 +323,15 @@ export default function TarotScreen() {
                         : card.guidance}
                     </Text>
                   </View>
-
-                  {/* shuffle link */}
-                  <View style={styles.shuffleWrap}>
-                    <Pressable onPress={handleNewReading} hitSlop={12}>
-                      <Text style={styles.shuffleText}>shuffle</Text>
-                    </Pressable>
-                  </View>
                 </>
               )}
 
-              {/* shuffle link for yesno mode */}
-              {readingMode === 'yesno' && (
-                <View style={styles.shuffleWrap}>
-                  <Pressable onPress={handleNewReading} hitSlop={12}>
-                    <Text style={styles.shuffleText}>shuffle</Text>
-                  </Pressable>
-                </View>
-              )}
+              {/* Draw again button */}
+              <View style={styles.drawAgainWrap}>
+                <Pressable onPress={handleNewReading} style={BUTTON.ghost}>
+                  <Text style={BUTTON.ghostText}>draw again</Text>
+                </Pressable>
+              </View>
             </View>
           </Animated.View>
         </View>
@@ -327,37 +352,44 @@ const styles = StyleSheet.create({
     paddingBottom: S.xxl,
   },
 
-  // ---- mode toggle ----
+  // ---- Mode toggle ----
   modeToggle: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: S.xl,
-    minHeight: 44,
   },
-  modeText: {
-    ...TYPE.muted,
+  modePill: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    paddingVertical: S.sm,
+    paddingHorizontal: S.md,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  modePillActive: {
+    backgroundColor: COLORS.accentSoft,
+    borderColor: COLORS.accentBorder,
+  },
+  modePillText: {
+    ...TYPE.secondary,
     fontSize: 14,
-    minHeight: 44,
-    textAlignVertical: 'center',
-    lineHeight: 44,
   },
-  modeTextActive: {
+  modePillTextActive: {
     color: COLORS.fg,
-    textDecorationLine: 'underline',
-  },
-  modeDot: {
-    ...TYPE.muted,
-    fontSize: 14,
   },
 
-  // ---- card container ----
+  // ---- Card container ----
   cardContainer: {
     width: '100%',
     flex: 1,
+    alignItems: 'center',
   },
   cardFace: {
     width: '100%',
+    alignItems: 'center',
     backfaceVisibility: 'hidden',
   },
   cardFaceAbsolute: {
@@ -367,112 +399,131 @@ const styles = StyleSheet.create({
     right: 0,
   },
 
-  // ---- unrevealed state ----
-  unrevealed: {
-    flex: 1,
-    minHeight: 500,
+  // ---- Unrevealed card back ----
+  cardBackPressable: {
+    minHeight: 44,
+  },
+  cardBack: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    backgroundColor: COLORS.accentSoft,
+    borderWidth: 1,
+    borderColor: COLORS.accentBorder,
+    borderRadius: RADIUS.lg,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: COLORS.accent,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 20,
+    shadowOpacity: 0.15,
+    elevation: 8,
   },
-  tapText: {
-    ...TYPE.muted,
-    fontSize: 14,
+  cardBackIcon: {
+    marginBottom: S.md,
+  },
+  cardBackTitle: {
+    ...TYPE.accent,
+    fontSize: 18,
+    letterSpacing: 4,
+    textAlign: 'center',
+    marginBottom: S.sm,
+  },
+  cardBackSubtitle: {
+    ...TYPE.secondary,
+    fontSize: 13,
     textAlign: 'center',
   },
 
-  // ---- revealed content ----
+  // ---- Revealed content ----
   revealedContent: {
     alignItems: 'center',
+    width: '100%',
   },
 
-  // ---- hero image ----
+  // ---- Hero image ----
   imageWrap: {
     alignItems: 'center',
-    marginBottom: S.xl,
+    marginBottom: 32,
   },
   cardImage: {
     width: CARD_IMAGE_WIDTH,
     height: CARD_IMAGE_HEIGHT,
-    borderRadius: RADIUS.sm,
+    borderRadius: RADIUS.md,
+    borderWidth: 2,
+    borderColor: COLORS.accentBorder,
   },
 
-  // ---- card name ----
+  // ---- Card name ----
   cardName: {
     ...TYPE.accent,
-    fontSize: 28,
+    fontSize: 26,
+    fontWeight: '600',
     textAlign: 'center',
-    marginBottom: S.xs,
+    marginBottom: S.sm,
   },
   reversedSuffix: {
-    ...TYPE.muted,
-    fontSize: 28,
+    ...TYPE.secondary,
+    fontSize: 26,
     fontFamily: TYPE.accent.fontFamily,
   },
 
-  // ---- astrology ----
+  // ---- Astrology ----
   astrology: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 13,
     fontStyle: 'italic',
     textAlign: 'center',
-    marginBottom: S.lg,
+    marginBottom: 32,
   },
 
-  // ---- yes/no answer ----
+  // ---- Yes/No answer ----
   yesNoAnswer: {
     ...TYPE.heading,
-    fontSize: 40,
+    fontSize: 36,
     textAlign: 'center',
     marginTop: S.md,
-    marginBottom: S.lg,
+    marginBottom: 32,
   },
 
-  // ---- keywords ----
+  // ---- Keywords ----
   keywords: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 13,
     textAlign: 'center',
     marginBottom: 32,
   },
 
-  // ---- sections ----
+  // ---- Sections ----
   sectionBlock: {
     width: '100%',
     marginBottom: S.lg,
   },
   sectionLabel: {
-    ...TYPE.muted,
-    fontSize: 11,
+    ...TYPE.secondary,
+    fontSize: 12,
     fontStyle: 'italic',
     marginBottom: S.sm,
   },
   bodyText: {
     ...TYPE.body,
-    fontSize: 16,
-    lineHeight: 26,
+    fontSize: 15,
+    lineHeight: 24,
   },
   reversedBlock: {
-    borderLeftWidth: 1,
-    borderLeftColor: COLORS.border,
+    borderLeftWidth: 2,
+    borderLeftColor: COLORS.accent,
     paddingLeft: S.md,
   },
   guidanceText: {
     ...TYPE.body,
-    fontSize: 16,
-    lineHeight: 26,
+    fontSize: 15,
+    lineHeight: 24,
     fontStyle: 'italic',
   },
 
-  // ---- shuffle ----
-  shuffleWrap: {
+  // ---- Draw again ----
+  drawAgainWrap: {
     alignItems: 'center',
     marginTop: 48,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  shuffleText: {
-    ...TYPE.muted,
-    fontSize: 14,
-    textDecorationLine: 'underline',
   },
 });
