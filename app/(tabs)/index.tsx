@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 
-import { COLORS, TYPE, S, SCREEN_PADDING } from '../../src/constants/theme';
+import { COLORS, TYPE, S, SCREEN_PADDING, SURFACE, BUTTON } from '../../src/constants/theme';
 import { useIdentity } from '../../src/hooks/useIdentity';
 import GradientBackground from '../../src/components/GradientBackground';
 import { TAROT_CARDS } from '../../src/data/tarot';
@@ -71,10 +71,11 @@ export default function HomeScreen() {
       <GradientBackground>
         <View style={styles.welcomeContainer}>
           <Pressable
+            style={BUTTON.primary}
             onPress={() => router.push('/onboarding')}
             hitSlop={20}
           >
-            <Text style={styles.welcomeText}>begin</Text>
+            <Text style={BUTTON.primaryText}>begin</Text>
           </Pressable>
         </View>
       </GradientBackground>
@@ -100,7 +101,7 @@ export default function HomeScreen() {
           onPress={() => router.push('/(tabs)/tarot')}
           hitSlop={{ top: 8, bottom: 8 }}
         >
-          <View style={styles.dailyCardRow}>
+          <View style={[SURFACE.card, styles.dailyCardRow]}>
             <Image
               source={cardImage}
               style={styles.dailyCardImage}
@@ -111,7 +112,6 @@ export default function HomeScreen() {
               <Text style={styles.dailyCardLabel}>your card today</Text>
             </View>
           </View>
-          <View style={styles.hairline} />
         </Pressable>
 
         <View style={styles.gap64} />
@@ -128,16 +128,16 @@ export default function HomeScreen() {
 
         {/* nav links */}
         <View style={styles.linksRow}>
-          <Pressable onPress={() => router.navigate('/(tabs)/tarot')} hitSlop={12}>
-            <Text style={styles.linkText}>guidance</Text>
+          <Pressable style={BUTTON.ghost} onPress={() => router.navigate('/(tabs)/tarot')}>
+            <Text style={BUTTON.ghostText}>guidance</Text>
           </Pressable>
-          <Text style={styles.linkDot}>  ·  </Text>
-          <Pressable onPress={() => router.navigate('/(tabs)/affirmations')} hitSlop={12}>
-            <Text style={styles.linkText}>affirm</Text>
+          <View style={styles.linkGap} />
+          <Pressable style={BUTTON.ghost} onPress={() => router.navigate('/(tabs)/affirmations')}>
+            <Text style={BUTTON.ghostText}>affirm</Text>
           </Pressable>
-          <Text style={styles.linkDot}>  ·  </Text>
-          <Pressable onPress={() => router.navigate('/(tabs)/journal')} hitSlop={12}>
-            <Text style={styles.linkText}>journal</Text>
+          <View style={styles.linkGap} />
+          <Pressable style={BUTTON.ghost} onPress={() => router.navigate('/(tabs)/journal')}>
+            <Text style={BUTTON.ghostText}>journal</Text>
           </Pressable>
         </View>
 
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
   },
   date: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 13,
     marginTop: S.xs,
   },
@@ -208,19 +208,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   dailyCardLabel: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 12,
     marginTop: S.xs,
-  },
-  hairline: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.border,
-    marginTop: S.md,
   },
 
   // identity
   becomingLabel: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 13,
     fontStyle: 'italic',
   },
@@ -236,14 +231,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  linkText: {
-    ...TYPE.muted,
-    fontSize: 14,
-    textDecorationLine: 'underline',
-  },
-  linkDot: {
-    ...TYPE.muted,
-    fontSize: 14,
+  linkGap: {
+    width: S.sm,
   },
 
   // streak
@@ -256,7 +245,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   streakLabel: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 14,
   },
 
@@ -265,9 +254,5 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  welcomeText: {
-    ...TYPE.heading,
-    fontSize: 32,
   },
 });
