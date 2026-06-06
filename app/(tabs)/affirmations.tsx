@@ -12,33 +12,54 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 // import * as Haptics from 'expo-haptics'; // TODO: re-enable when Node compat fixed
 
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, SCREEN_PADDING } from '../../src/constants/theme';
+import {
+  COLORS,
+  TYPOGRAPHY,
+  SPACING,
+  BORDER_RADIUS,
+  GLOW,
+  PRESS,
+  SCREEN_PADDING,
+} from '../../src/constants/theme';
 import { AFFIRMATION_CATEGORIES, Affirmation } from '../../src/data/affirmations';
 import GradientBackground from '../../src/components/GradientBackground';
-import NeumorphicCard from '../../src/components/NeumorphicCard';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = SCREEN_WIDTH - SCREEN_PADDING * 2;
-const CARD_HEIGHT = 360;
+const CARD_HEIGHT = 380;
 const HOLD_DURATION = 500;
 
 export default function AffirmationsScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(AFFIRMATION_CATEGORIES[0].id);
   const [affirmedIds, setAffirmedIds] = useState<Set<number>>(new Set());
+  const flatListRef = useRef<FlatList>(null);
 
   const selectedCategory = AFFIRMATION_CATEGORIES.find((c) => c.id === selectedCategoryId)!;
   const affirmations = selectedCategory.affirmations;
 
-  const todayAffirmedCount = affirmedIds.size;
-  const totalCount = AFFIRMATION_CATEGORIES.reduce((sum, cat) => sum + cat.affirmations.length, 0);
+  const categoryAffirmedCount = affirmations.filter((a) => affirmedIds.has(a.id)).length;
 
   // -----------------------------------------------------------------------
   // Category pill press
   // -----------------------------------------------------------------------
   const handleCategoryPress = useCallback((id: string) => {
     setSelectedCategoryId(id);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
     // Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
+
+  // -----------------------------------------------------------------------
+  // Page indicator state
+  // -----------------------------------------------------------------------
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      setActiveIndex(viewableItems[0].index ?? 0);
+    }
+  }).current;
+
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
   // -----------------------------------------------------------------------
   // Render category pill
@@ -50,9 +71,10 @@ export default function AffirmationsScreen() {
       <Pressable
         key={category.id}
         onPress={() => handleCategoryPress(category.id)}
-        style={[
+        style={({ pressed }) => [
           styles.pill,
           isSelected ? styles.pillSelected : styles.pillUnselected,
+          pressed && { opacity: PRESS.opacity },
         ]}
         accessibilityRole="button"
         accessibilityState={{ selected: isSelected }}
@@ -61,7 +83,7 @@ export default function AffirmationsScreen() {
         <Ionicons
           name={category.icon as any}
           size={16}
-          color={isSelected ? '#FFFFFF' : COLORS.primary}
+          color={isSelected ? '#FFFFFF' : COLORS.foregroundMuted}
           style={styles.pillIcon}
         />
         <Text style={[styles.pillText, isSelected && styles.pillTextSelected]}>
@@ -99,14 +121,6 @@ export default function AffirmationsScreen() {
         {/* Header */}
         <Text style={styles.title}>Affirmations</Text>
 
-        {/* Counter */}
-        <View style={styles.counterRow}>
-          <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.accent} />
-          <Text style={styles.counterText}>
-            {todayAffirmedCount}/{totalCount} affirmed today
-          </Text>
-        </View>
-
         {/* Category selector */}
         <ScrollView
           horizontal
@@ -118,18 +132,43 @@ export default function AffirmationsScreen() {
         </ScrollView>
 
         {/* Affirmation cards */}
-        <FlatList
-          data={affirmations}
-          renderItem={renderAffirmationCard}
-          keyExtractor={(item) => String(item.id)}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          snapToInterval={CARD_WIDTH + SPACING.md}
-          decelerationRate="fast"
-          contentContainerStyle={styles.cardList}
-          style={styles.cardListContainer}
-        />
+        <View style={styles.cardSection}>
+          <FlatList
+            ref={flatListRef}
+            data={affirmations}
+            renderItem={renderAffirmationCard}
+            keyExtractor={(item) => String(item.id)}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={CARD_WIDTH + SPACING.md}
+            decelerationRate="fast"
+            contentContainerStyle={styles.cardList}
+            onViewableItemsChanged={onViewableItemsChanged}
+            viewabilityConfig={viewabilityConfig}
+          />
+
+          {/* Page dots */}
+          <View style={styles.dotsContainer}>
+            {affirmations.map((_, index) => (
+              <View
+                key={index}
+                style={[
+                  styles.dot,
+                  index === activeIndex && styles.dotActive,
+                ]}
+              />
+            ))}
+          </View>
+        </View>
+
+        {/* Counter */}
+        <View style={styles.counterRow}>
+          <Ionicons name="checkmark-circle-outline" size={18} color={COLORS.accent} />
+          <Text style={styles.counterText}>
+            {categoryAffirmedCount} of {affirmations.length} affirmed
+          </Text>
+        </View>
       </View>
     </GradientBackground>
   );
@@ -154,10 +193,10 @@ function AffirmationCard({ affirmation, isAffirmed, onAffirm }: AffirmationCardP
   const handlePressIn = () => {
     if (isAffirmed) return;
 
-    // Scale down subtly
+    // Scale down with spring
     Animated.spring(scaleAnim, {
-      toValue: 0.96,
-      useNativeDriver: true,
+      toValue: PRESS.scale,
+      ...PRESS.springConfig,
     }).start();
 
     // Progress bar fill over HOLD_DURATION
@@ -172,10 +211,16 @@ function AffirmationCard({ affirmation, isAffirmed, onAffirm }: AffirmationCardP
     holdTimer.current = setTimeout(() => {
       // Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       onAffirm();
-      // Bounce scale
+      // Scale up then settle
       Animated.sequence([
-        Animated.spring(scaleAnim, { toValue: 1.04, useNativeDriver: true }),
-        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }),
+        Animated.spring(scaleAnim, {
+          toValue: 1.02,
+          ...PRESS.springConfig,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          ...PRESS.springConfig,
+        }),
       ]).start();
     }, HOLD_DURATION);
   };
@@ -190,12 +235,13 @@ function AffirmationCard({ affirmation, isAffirmed, onAffirm }: AffirmationCardP
       animRef.current = null;
     }
 
-    // Reset
+    // Reset scale
     Animated.spring(scaleAnim, {
       toValue: 1,
-      useNativeDriver: true,
+      ...PRESS.springConfig,
     }).start();
 
+    // Reset progress
     Animated.timing(progressAnim, {
       toValue: 0,
       duration: 150,
@@ -219,16 +265,16 @@ function AffirmationCard({ affirmation, isAffirmed, onAffirm }: AffirmationCardP
         accessibilityHint={isAffirmed ? undefined : 'Long press to affirm'}
       >
         <View style={[styles.card, isAffirmed && styles.cardAffirmed]}>
-          {/* Icon */}
-          <View style={styles.cardIconContainer}>
+          {/* Category icon */}
+          <View style={[styles.cardIconContainer, isAffirmed && styles.cardIconContainerAffirmed]}>
             <Ionicons
               name={affirmation.icon as any}
-              size={48}
-              color={isAffirmed ? COLORS.accent : COLORS.primary}
+              size={32}
+              color={isAffirmed ? COLORS.accent : COLORS.accent}
             />
           </View>
 
-          {/* Text */}
+          {/* Affirmation text */}
           <Text style={styles.cardText}>{affirmation.text}</Text>
 
           {/* Hold to Affirm / Affirmed label */}
@@ -240,7 +286,7 @@ function AffirmationCard({ affirmation, isAffirmed, onAffirm }: AffirmationCardP
               </>
             ) : (
               <>
-                <Ionicons name="finger-print-outline" size={20} color={COLORS.secondary} />
+                <Ionicons name="finger-print-outline" size={20} color={COLORS.foregroundMuted} />
                 <Text style={styles.holdLabel}>Hold to Affirm</Text>
               </>
             )}
@@ -280,22 +326,8 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.bold,
     color: COLORS.foreground,
     paddingHorizontal: SCREEN_PADDING,
-    marginBottom: SPACING.xs,
-  },
-
-  // -- Counter --
-  counterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SCREEN_PADDING,
     marginBottom: SPACING.md,
-    gap: SPACING.xs,
-  },
-  counterText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.secondary,
+    fontStyle: 'italic',
   },
 
   // -- Category pills --
@@ -318,14 +350,12 @@ const styles = StyleSheet.create({
   },
   pillSelected: {
     backgroundColor: COLORS.primary,
-    ...SHADOWS.raised.dark,
+    ...GLOW.primaryGlow,
   },
   pillUnselected: {
-    backgroundColor: COLORS.muted,
-    borderWidth: 1,
+    backgroundColor: COLORS.bgCard,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
-    ...SHADOWS.raised.dark,
-    shadowOpacity: 0.15,
   },
   pillIcon: {
     marginRight: SPACING.xs,
@@ -334,20 +364,44 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.sm,
     fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.primary,
+    color: COLORS.foregroundMuted,
   },
   pillTextSelected: {
     color: '#FFFFFF',
   },
 
-  // -- Card list --
-  cardListContainer: {
+  // -- Card section --
+  cardSection: {
     flex: 1,
+    justifyContent: 'center',
   },
+
+  // -- Card list --
   cardList: {
     paddingHorizontal: SCREEN_PADDING,
     gap: SPACING.md,
     alignItems: 'center',
+  },
+
+  // -- Page dots --
+  dotsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.md,
+    gap: SPACING.sm,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.border,
+  },
+  dotActive: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.primary,
   },
 
   // -- Card --
@@ -361,42 +415,34 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     height: CARD_HEIGHT,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.bgCard,
     borderRadius: BORDER_RADIUS.lg,
     padding: SPACING.xl,
     justifyContent: 'center',
     alignItems: 'center',
-
-    // Neumorphic dual shadow (dark side -- light side handled by inner highlight)
-    shadowColor: COLORS.shadowDark,
-    shadowOffset: { width: 5, height: 5 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 6,
-
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
   },
   cardAffirmed: {
     borderColor: COLORS.accent,
-    borderWidth: 1.5,
+    borderWidth: 1,
+    ...GLOW.accentGlow,
   },
 
   cardIconContainer: {
-    width: 80,
-    height: 80,
+    width: 72,
+    height: 72,
     borderRadius: BORDER_RADIUS.xl,
-    backgroundColor: COLORS.muted,
+    backgroundColor: COLORS.surface,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.lg,
-
-    // Inner neumorphic look
-    shadowColor: COLORS.shadowDark,
-    shadowOffset: { width: 2, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+  },
+  cardIconContainerAffirmed: {
+    backgroundColor: COLORS.accentGlow,
+    borderColor: COLORS.accent,
   },
 
   cardText: {
@@ -421,7 +467,7 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.secondary,
+    color: COLORS.foregroundMuted,
   },
   affirmedLabel: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
@@ -436,15 +482,31 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 4,
-    backgroundColor: COLORS.border,
+    height: 3,
+    backgroundColor: COLORS.surface,
     borderBottomLeftRadius: BORDER_RADIUS.lg,
     borderBottomRightRadius: BORDER_RADIUS.lg,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: COLORS.accent,
+    backgroundColor: COLORS.primary,
     borderBottomLeftRadius: BORDER_RADIUS.lg,
+  },
+
+  // -- Counter --
+  counterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: SCREEN_PADDING,
+    paddingBottom: SPACING.md,
+    gap: SPACING.xs,
+  },
+  counterText: {
+    fontFamily: TYPOGRAPHY.fontFamily.body,
+    fontSize: TYPOGRAPHY.sizes.base,
+    fontWeight: TYPOGRAPHY.weights.medium,
+    color: COLORS.foregroundMuted,
   },
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, StatusBar } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
@@ -11,9 +11,10 @@ interface GradientBackgroundProps {
 export default function GradientBackground({ children }: GradientBackgroundProps) {
   return (
     <LinearGradient
-      colors={[COLORS.background, '#F3E8FF']}
+      colors={[COLORS.bgBase, COLORS.bgDeep]}
       style={styles.gradient}
     >
+      <StatusBar barStyle="light-content" />
       <SafeAreaView style={styles.safeArea}>
         {children}
       </SafeAreaView>

@@ -7,26 +7,37 @@ import {
   ScrollView,
   StyleSheet,
   Alert,
-  Platform,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, SCREEN_PADDING } from '../../src/constants/theme';
+import {
+  COLORS,
+  TYPOGRAPHY,
+  SPACING,
+  BORDER_RADIUS,
+  SCREEN_PADDING,
+  PRESS,
+  GLOW,
+} from '../../src/constants/theme';
 import { JOURNAL_PROMPTS, JournalPrompt } from '../../src/data/journal-prompts';
+import Card from '../../src/components/Card';
 import GradientBackground from '../../src/components/GradientBackground';
-import NeumorphicCard from '../../src/components/NeumorphicCard';
 import { useIdentity, JournalEntry } from '../../src/hooks/useIdentity';
 import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
 
 // ---------------------------------------------------------------------------
-// Category tag color mapping
+// Category styling -- color + icon per category
 // ---------------------------------------------------------------------------
 
-const CATEGORY_COLORS: Record<JournalPrompt['category'], string> = {
-  identity: COLORS.primary,
-  beliefs: '#A855F7',
-  systems: '#0EA5E9',
-  actions: COLORS.accent,
-  reflection: '#F59E0B',
+const CATEGORY_META: Record<
+  JournalPrompt['category'],
+  { color: string; icon: string }
+> = {
+  identity: { color: COLORS.primary, icon: 'person-outline' },
+  beliefs: { color: COLORS.accent, icon: 'bulb-outline' },
+  systems: { color: COLORS.success, icon: 'sync-outline' },
+  actions: { color: COLORS.secondary, icon: 'footsteps-outline' },
+  reflection: { color: COLORS.accent, icon: 'eye-outline' },
 };
 
 // ---------------------------------------------------------------------------
@@ -44,6 +55,10 @@ export default function JournalScreen() {
   const [saving, setSaving] = useState(false);
   const [entryCounter, setEntryCounter] = useState(0);
 
+  // Animated values for press feedback
+  const saveScale = React.useRef(new Animated.Value(1)).current;
+  const newPromptScale = React.useRef(new Animated.Value(1)).current;
+
   // Load past entries on mount
   useEffect(() => {
     let mounted = true;
@@ -58,6 +73,21 @@ export default function JournalScreen() {
       mounted = false;
     };
   }, [getJournalEntries]);
+
+  // Press animation helpers
+  const animatePressIn = useCallback((anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: PRESS.scale,
+      ...PRESS.springConfig,
+    }).start();
+  }, []);
+
+  const animatePressOut = useCallback((anim: Animated.Value) => {
+    Animated.spring(anim, {
+      toValue: 1,
+      ...PRESS.springConfig,
+    }).start();
+  }, []);
 
   // Save handler
   const handleSave = useCallback(async () => {
@@ -119,6 +149,8 @@ export default function JournalScreen() {
     });
   }, []);
 
+  const categoryMeta = CATEGORY_META[currentPrompt.category];
+
   return (
     <GradientBackground>
       <ScrollView
@@ -131,27 +163,36 @@ export default function JournalScreen() {
         <Text style={styles.title}>Journal</Text>
 
         {/* ── Today's Prompt Card ──────────────────────── */}
-        <NeumorphicCard style={styles.promptCard}>
-          {/* Category Tag */}
+        <Card variant="default" style={styles.promptCard}>
+          {/* Category Pill */}
           <View
             style={[
-              styles.categoryTag,
-              { backgroundColor: CATEGORY_COLORS[currentPrompt.category] },
+              styles.categoryPill,
+              { backgroundColor: categoryMeta.color + '22' },
+              { borderColor: categoryMeta.color + '44' },
             ]}
           >
-            <Text style={styles.categoryTagText}>
+            <Ionicons
+              name={categoryMeta.icon as any}
+              size={14}
+              color={categoryMeta.color}
+              style={styles.categoryPillIcon}
+            />
+            <Text style={[styles.categoryPillText, { color: categoryMeta.color }]}>
               {currentPrompt.category.charAt(0).toUpperCase() +
                 currentPrompt.category.slice(1)}
             </Text>
           </View>
 
-          {/* Icon */}
+          {/* Prompt Icon */}
           <View style={styles.promptIconRow}>
-            <Ionicons
-              name={currentPrompt.icon as any}
-              size={28}
-              color={COLORS.primary}
-            />
+            <View style={styles.promptIconCircle}>
+              <Ionicons
+                name={currentPrompt.icon as any}
+                size={28}
+                color={COLORS.accent}
+              />
+            </View>
           </View>
 
           {/* Prompt Text */}
@@ -161,14 +202,14 @@ export default function JournalScreen() {
           {currentPrompt.followUp ? (
             <Text style={styles.followUpText}>{currentPrompt.followUp}</Text>
           ) : null}
-        </NeumorphicCard>
+        </Card>
 
         {/* ── Text Input ───────────────────────────────── */}
         <View style={styles.inputWrapper}>
           <TextInput
             style={styles.textInput}
             placeholder="Write your thoughts here..."
-            placeholderTextColor={COLORS.border}
+            placeholderTextColor={COLORS.foregroundMuted}
             multiline
             numberOfLines={6}
             textAlignVertical="top"
@@ -177,58 +218,79 @@ export default function JournalScreen() {
           />
         </View>
 
-        {/* ── Save Button ──────────────────────────────── */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.saveButton,
-            pressed && styles.saveButtonPressed,
-            saving && styles.saveButtonDisabled,
-          ]}
-          onPress={handleSave}
-          disabled={saving}
-        >
-          <Ionicons
-            name="bookmark-outline"
-            size={20}
-            color="#FFFFFF"
-            style={styles.saveButtonIcon}
-          />
-          <Text style={styles.saveButtonText}>
-            {saving ? 'Saving...' : 'Save Entry'}
-          </Text>
-        </Pressable>
+        {/* ── Action Row ───────────────────────────────── */}
+        <View style={styles.actionRow}>
+          {/* Save Entry Button */}
+          <Pressable
+            onPressIn={() => animatePressIn(saveScale)}
+            onPressOut={() => animatePressOut(saveScale)}
+            onPress={handleSave}
+            disabled={saving}
+          >
+            <Animated.View
+              style={[
+                styles.saveButton,
+                saving && styles.saveButtonDisabled,
+                { transform: [{ scale: saveScale }] },
+              ]}
+            >
+              <Ionicons
+                name="bookmark-outline"
+                size={20}
+                color="#FFFFFF"
+                style={styles.saveButtonIcon}
+              />
+              <Text style={styles.saveButtonText}>
+                {saving ? 'Saving...' : 'Save Entry'}
+              </Text>
+            </Animated.View>
+          </Pressable>
 
-        {/* ── Get New Prompt ───────────────────────────── */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.newPromptButton,
-            pressed && styles.newPromptButtonPressed,
-          ]}
-          onPress={handleNewPrompt}
-        >
-          <Ionicons
-            name="refresh-outline"
-            size={20}
-            color={COLORS.primary}
-            style={styles.newPromptIcon}
-          />
-          <Text style={styles.newPromptButtonText}>Get New Prompt</Text>
-        </Pressable>
+          {/* New Prompt Button */}
+          <Pressable
+            onPressIn={() => animatePressIn(newPromptScale)}
+            onPressOut={() => animatePressOut(newPromptScale)}
+            onPress={handleNewPrompt}
+          >
+            <Animated.View
+              style={[
+                styles.newPromptButton,
+                { transform: [{ scale: newPromptScale }] },
+              ]}
+            >
+              <Ionicons
+                name="refresh-outline"
+                size={20}
+                color={COLORS.foregroundMuted}
+                style={styles.newPromptIcon}
+              />
+              <Text style={styles.newPromptButtonText}>New Prompt</Text>
+            </Animated.View>
+          </Pressable>
+        </View>
 
         {/* ── Past Entries ─────────────────────────────── */}
         {recentEntries.length > 0 ? (
           <View style={styles.pastSection}>
-            <Text style={styles.pastTitle}>Past Entries</Text>
+            <Text style={styles.pastSectionLabel}>Recent Entries</Text>
             {recentEntries.map((entry) => (
-              <NeumorphicCard key={entry.id} style={styles.pastCard}>
-                <Text style={styles.pastDate}>{formatDate(entry.date)}</Text>
+              <Card key={entry.id} variant="default" style={styles.pastCard}>
+                <View style={styles.pastCardHeader}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={14}
+                    color={COLORS.foregroundMuted}
+                    style={styles.pastDateIcon}
+                  />
+                  <Text style={styles.pastDate}>{formatDate(entry.date)}</Text>
+                </View>
                 <Text style={styles.pastPrompt} numberOfLines={1}>
                   {getPromptText(entry.promptId)}
                 </Text>
                 <Text style={styles.pastPreview} numberOfLines={2}>
                   {entry.response}
                 </Text>
-              </NeumorphicCard>
+              </Card>
             ))}
           </View>
         ) : null}
@@ -251,72 +313,77 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxl,
   },
 
-  // Title
+  // ── Title ──────────────────────────────────────────────────
   title: {
     fontFamily: TYPOGRAPHY.fontFamily.heading,
     fontSize: TYPOGRAPHY.sizes['2xl'],
     fontWeight: TYPOGRAPHY.weights.bold,
     color: COLORS.foreground,
     marginBottom: SPACING.lg,
+    letterSpacing: 0.5,
   },
 
-  // Prompt card
+  // ── Prompt Card ────────────────────────────────────────────
   promptCard: {
     marginBottom: SPACING.lg,
   },
-  categoryTag: {
+  categoryPill: {
     alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: SPACING.sm + 4,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.sm,
+    paddingVertical: SPACING.xs + 2,
+    borderRadius: BORDER_RADIUS.full,
+    borderWidth: StyleSheet.hairlineWidth,
     marginBottom: SPACING.md,
   },
-  categoryTagText: {
+  categoryPillIcon: {
+    marginRight: SPACING.xs,
+  },
+  categoryPillText: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.sm,
     fontWeight: TYPOGRAPHY.weights.semibold,
-    color: '#FFFFFF',
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   promptIconRow: {
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.sm + 4,
+  },
+  promptIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: BORDER_RADIUS.xl,
+    backgroundColor: COLORS.accentGlow,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(212,165,116,0.25)',
   },
   promptText: {
     fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.lg,
+    fontSize: 20,
     fontWeight: TYPOGRAPHY.weights.semibold,
     color: COLORS.foreground,
-    lineHeight: TYPOGRAPHY.sizes.lg * TYPOGRAPHY.lineHeights.normal,
+    lineHeight: 20 * TYPOGRAPHY.lineHeights.normal,
     marginBottom: SPACING.sm,
   },
   followUpText: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.secondary,
+    color: COLORS.foregroundMuted,
     lineHeight: TYPOGRAPHY.sizes.base * TYPOGRAPHY.lineHeights.relaxed,
     fontStyle: 'italic',
   },
 
-  // Text input -- neumorphic inset
+  // ── Text Input ─────────────────────────────────────────────
   inputWrapper: {
-    backgroundColor: COLORS.muted,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
     marginBottom: SPACING.md,
-    // Inset shadow effect
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.shadowDark,
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
   },
   textInput: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
@@ -330,44 +397,27 @@ const styles = StyleSheet.create({
     minHeight: 160,
   },
 
-  // Save button
+  // ── Action Row ─────────────────────────────────────────────
+  actionRow: {
+    flexDirection: 'row',
+    gap: SPACING.sm + 4,
+    marginBottom: SPACING.xl,
+  },
+
+  // Save button -- primary CTA with purple glow
   saveButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: COLORS.primary,
     borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.md - 2,
+    paddingVertical: SPACING.sm + 4,
     paddingHorizontal: SPACING.lg,
     minHeight: 48,
-    marginBottom: SPACING.sm,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.shadowDark,
-        shadowOffset: { width: 4, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 6,
-      },
-      android: {
-        elevation: 4,
-      },
-    }),
-  },
-  saveButtonPressed: {
-    opacity: 0.85,
-    ...Platform.select({
-      ios: {
-        shadowOffset: { width: 2, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 3,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
+    ...GLOW.primaryGlow,
   },
   saveButtonDisabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   saveButtonIcon: {
     marginRight: SPACING.sm,
@@ -379,33 +429,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // New prompt button
+  // New prompt button -- subtle card style
   newPromptButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.muted,
+    backgroundColor: COLORS.bgCard,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
-    paddingVertical: SPACING.md - 2,
+    paddingVertical: SPACING.sm + 4,
     paddingHorizontal: SPACING.lg,
     minHeight: 48,
-    marginBottom: SPACING.xl,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.shadowDark,
-        shadowOffset: { width: 3, height: 3 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 2,
-      },
-    }),
-  },
-  newPromptButtonPressed: {
-    opacity: 0.85,
   },
   newPromptIcon: {
     marginRight: SPACING.sm,
@@ -413,30 +448,40 @@ const styles = StyleSheet.create({
   newPromptButtonText: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.primary,
+    fontWeight: TYPOGRAPHY.weights.medium,
+    color: COLORS.foregroundMuted,
   },
 
-  // Past entries section
+  // ── Past Entries ───────────────────────────────────────────
   pastSection: {
     marginBottom: SPACING.lg,
   },
-  pastTitle: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.xl,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.foreground,
+  pastSectionLabel: {
+    fontFamily: TYPOGRAPHY.fontFamily.body,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+    color: COLORS.foregroundMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
     marginBottom: SPACING.md,
   },
   pastCard: {
     marginBottom: SPACING.sm + 4,
+    padding: SPACING.md,
+  },
+  pastCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xs + 2,
+  },
+  pastDateIcon: {
+    marginRight: SPACING.xs,
   },
   pastDate: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.sm,
     fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.secondary,
-    marginBottom: SPACING.xs,
+    color: COLORS.foregroundMuted,
   },
   pastPrompt: {
     fontFamily: TYPOGRAPHY.fontFamily.heading,
@@ -449,8 +494,7 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foreground,
-    opacity: 0.7,
+    color: COLORS.foregroundMuted,
     lineHeight: TYPOGRAPHY.sizes.base * TYPOGRAPHY.lineHeights.normal,
   },
 });

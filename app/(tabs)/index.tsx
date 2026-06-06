@@ -6,6 +6,8 @@ import {
   StyleSheet,
   Pressable,
   ActivityIndicator,
+  Image,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -15,14 +17,16 @@ import {
   TYPOGRAPHY,
   SPACING,
   BORDER_RADIUS,
-  SHADOWS,
+  GLOW,
+  PRESS,
   SCREEN_PADDING,
 } from '../../src/constants/theme';
 import { useIdentity } from '../../src/hooks/useIdentity';
 import GradientBackground from '../../src/components/GradientBackground';
-import NeumorphicCard from '../../src/components/NeumorphicCard';
+import Card from '../../src/components/Card';
 import { TAROT_CARDS } from '../../src/data/tarot';
 import { getDailyItem } from '../../src/utils/shuffle';
+import { getCardImage } from '../../src/data/tarot-images';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,17 +58,37 @@ interface QuickActionProps {
 }
 
 function QuickAction({ icon, label, onPress }: QuickActionProps) {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: PRESS.scale,
+      ...PRESS.springConfig,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      ...PRESS.springConfig,
+    }).start();
+  };
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.quickAction,
-        pressed && styles.quickActionPressed,
-      ]}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={{ alignItems: 'center', flex: 1 }}
     >
-      <View style={styles.quickActionIconContainer}>
+      <Animated.View
+        style={[
+          styles.quickActionCircle,
+          { transform: [{ scale: scaleAnim }] },
+        ]}
+      >
         <Ionicons name={icon} size={24} color={COLORS.primary} />
-      </View>
+      </Animated.View>
       <Text style={styles.quickActionLabel}>{label}</Text>
     </Pressable>
   );
@@ -75,6 +99,22 @@ function QuickAction({ icon, label, onPress }: QuickActionProps) {
 // ---------------------------------------------------------------------------
 
 function WelcomeScreen() {
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: PRESS.scale,
+      ...PRESS.springConfig,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      ...PRESS.springConfig,
+    }).start();
+  };
+
   return (
     <GradientBackground>
       <View style={styles.welcomeContainer}>
@@ -82,21 +122,26 @@ function WelcomeScreen() {
           <Ionicons name="sparkles-outline" size={48} color={COLORS.primary} />
         </View>
 
-        <Text style={styles.welcomeTitle}>Welcome to Inner Light</Text>
+        <Text style={styles.welcomeTitle}>Inner Light</Text>
 
         <Text style={styles.welcomeSubtitle}>
-          Begin your journey by setting an intention for who you want to become.
+          Discover your path through daily tarot, affirmations, and mindful journaling.
         </Text>
 
         <Pressable
           onPress={() => router.push('/onboarding')}
-          style={({ pressed }) => [
-            styles.welcomeButton,
-            pressed && { opacity: 0.85 },
-          ]}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
         >
-          <Text style={styles.welcomeButtonText}>Set Your Intention</Text>
-          <Ionicons name="arrow-forward" size={20} color={COLORS.card} />
+          <Animated.View
+            style={[
+              styles.welcomeButton,
+              { transform: [{ scale: scaleAnim }] },
+            ]}
+          >
+            <Text style={styles.welcomeButtonText}>Begin Your Journey</Text>
+            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+          </Animated.View>
         </Pressable>
       </View>
     </GradientBackground>
@@ -112,6 +157,7 @@ export default function HomeScreen() {
   const [streak, setStreak] = useState(0);
 
   const dailyCard = getDailyItem(TAROT_CARDS);
+  const cardImage = getCardImage(dailyCard.id);
 
   useEffect(() => {
     let mounted = true;
@@ -149,92 +195,68 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Greeting */}
-        <View style={styles.greetingSection}>
+        {/* 1. Header -- greeting + date */}
+        <View style={styles.headerSection}>
           <Text style={styles.greeting}>
             {getGreeting()}, {identity.name}
           </Text>
           <Text style={styles.date}>{getFormattedDate()}</Text>
         </View>
 
-        {/* Daily Tarot Card */}
-        <NeumorphicCard
-          style={styles.tarotCard}
-          onPress={() => router.push('/(tabs)/tarot')}
+        {/* 2. Daily Card Preview */}
+        <Card
+          variant="default"
+          onPress={() => router.navigate('/(tabs)/tarot')}
+          style={styles.dailyCardContainer}
         >
-          <View style={styles.tarotHeader}>
-            <Ionicons
-              name={(dailyCard.icon as keyof typeof Ionicons.glyphMap) || 'star-outline'}
-              size={32}
-              color={COLORS.primary}
+          <View style={styles.dailyCardContent}>
+            <Image
+              source={cardImage}
+              style={styles.dailyCardImage}
+              resizeMode="cover"
             />
-            <View style={styles.tarotBadge}>
-              <Text style={styles.tarotBadgeText}>Daily Card</Text>
+            <View style={styles.dailyCardInfo}>
+              <Text style={styles.dailyCardLabel}>Today's Card</Text>
+              <Text style={styles.dailyCardName}>{dailyCard.name}</Text>
+              <Text style={styles.dailyCardCta}>Tap to view full reading</Text>
             </View>
           </View>
+        </Card>
 
-          <Text style={styles.tarotName}>{dailyCard.name}</Text>
-
-          <Text style={styles.tarotKeywords}>
-            {dailyCard.keywords.join('  /  ')}
-          </Text>
-
-          <Text style={styles.tarotGuidance} numberOfLines={3}>
-            {dailyCard.guidance}
-          </Text>
-
-          <View style={styles.viewCardRow}>
-            <Text style={styles.viewCardText}>View Card</Text>
-            <Ionicons name="chevron-forward" size={16} color={COLORS.primary} />
+        {/* 3. Identity / Intention Section */}
+        <View style={styles.identitySection}>
+          <Text style={styles.identityBecoming}>I am becoming...</Text>
+          <View style={styles.identityGlow}>
+            <Text style={styles.identityIntention}>{identity.intention}</Text>
           </View>
-        </NeumorphicCard>
+        </View>
 
-        {/* Identity Reminder */}
-        <NeumorphicCard style={styles.identityCard}>
-          <View style={styles.identityHeader}>
-            <Ionicons name="compass-outline" size={22} color={COLORS.accent} />
-            <Text style={styles.identityLabel}>Your Intention</Text>
-          </View>
-          <Text style={styles.identityIntention}>{identity.intention}</Text>
-        </NeumorphicCard>
-
-        {/* Quick Actions */}
-        <Text style={styles.sectionTitle}>Quick Actions</Text>
+        {/* 4. Quick Actions */}
         <View style={styles.quickActionsRow}>
           <QuickAction
-            icon="layers-outline"
-            label="Pull Card"
-            onPress={() => router.push('/(tabs)/tarot')}
+            icon="sparkles"
+            label="Guidance"
+            onPress={() => router.navigate('/(tabs)/tarot')}
           />
           <QuickAction
-            icon="heart-outline"
+            icon="heart"
             label="Affirm"
-            onPress={() => router.push('/(tabs)/affirmations')}
+            onPress={() => router.navigate('/(tabs)/affirmations')}
           />
           <QuickAction
-            icon="journal-outline"
+            icon="book"
             label="Journal"
-            onPress={() => router.push('/(tabs)/journal')}
+            onPress={() => router.navigate('/(tabs)/journal')}
           />
         </View>
 
-        {/* Streak Counter */}
-        <NeumorphicCard style={styles.streakCard}>
-          <View style={styles.streakContent}>
-            <Ionicons name="flame" size={28} color={COLORS.accent} />
-            <View style={styles.streakTextContainer}>
-              <Text style={styles.streakCount}>{streak}</Text>
-              <Text style={styles.streakLabel}>
-                {streak === 1 ? 'day streak' : 'day streak'}
-              </Text>
-            </View>
-          </View>
-          <Text style={styles.streakMessage}>
-            {streak === 0
-              ? 'Start your streak today by completing a daily practice.'
-              : 'Keep the flame alive. Show up for yourself every day.'}
+        {/* 5. Streak */}
+        <View style={styles.streakSection}>
+          <Ionicons name="flame" size={24} color={COLORS.accent} />
+          <Text style={styles.streakText}>
+            {streak} day streak
           </Text>
-        </NeumorphicCard>
+        </View>
       </ScrollView>
     </GradientBackground>
   );
@@ -258,8 +280,8 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxl,
   },
 
-  // Greeting
-  greetingSection: {
+  // 1. Header
+  headerSection: {
     marginTop: SPACING.lg,
     marginBottom: SPACING.lg,
   },
@@ -272,175 +294,117 @@ const styles = StyleSheet.create({
   },
   date: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
+    fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.secondary,
+    color: COLORS.foregroundMuted,
     marginTop: SPACING.xs,
   },
 
-  // Tarot card
-  tarotCard: {
-    marginBottom: SPACING.md,
+  // 2. Daily Card Preview
+  dailyCardContainer: {
+    marginBottom: SPACING.lg,
   },
-  tarotHeader: {
+  dailyCardContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
   },
-  tarotBadge: {
-    backgroundColor: COLORS.muted,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
-    borderRadius: BORDER_RADIUS.full,
+  dailyCardImage: {
+    width: 60,
+    height: 100,
+    borderRadius: BORDER_RADIUS.sm,
   },
-  tarotBadgeText: {
+  dailyCardInfo: {
+    flex: 1,
+    marginLeft: SPACING.md,
+  },
+  dailyCardLabel: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.xs,
     fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.primary,
+    color: COLORS.foregroundMuted,
     textTransform: 'uppercase',
     letterSpacing: 1,
+    marginBottom: SPACING.xs,
   },
-  tarotName: {
+  dailyCardName: {
     fontFamily: TYPOGRAPHY.fontFamily.heading,
     fontSize: TYPOGRAPHY.sizes.xl,
     fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.foreground,
+    color: COLORS.accent,
     marginBottom: SPACING.xs,
   },
-  tarotKeywords: {
+  dailyCardCta: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.secondary,
-    marginBottom: SPACING.sm,
+    fontWeight: TYPOGRAPHY.weights.regular,
+    color: COLORS.foregroundMuted,
   },
-  tarotGuidance: {
+
+  // 3. Identity Section
+  identitySection: {
+    marginBottom: SPACING.lg,
+    alignItems: 'center',
+  },
+  identityBecoming: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foreground,
-    lineHeight: TYPOGRAPHY.sizes.base * TYPOGRAPHY.lineHeights.relaxed,
-    marginBottom: SPACING.md,
-  },
-  viewCardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewCardText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.primary,
-    marginRight: SPACING.xs,
-  },
-
-  // Identity
-  identityCard: {
-    marginBottom: SPACING.lg,
-  },
-  identityHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    color: COLORS.foregroundMuted,
     marginBottom: SPACING.sm,
   },
-  identityLabel: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.accent,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginLeft: SPACING.sm,
+  identityGlow: {
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.lg,
+    backgroundColor: COLORS.accentGlow,
+    ...GLOW.accentGlow,
   },
   identityIntention: {
     fontFamily: TYPOGRAPHY.fontFamily.heading,
     fontSize: TYPOGRAPHY.sizes.lg,
     fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.foreground,
-    fontStyle: 'italic',
+    color: COLORS.accent,
+    textAlign: 'center',
     lineHeight: TYPOGRAPHY.sizes.lg * TYPOGRAPHY.lineHeights.normal,
   },
 
-  // Quick Actions
-  sectionTitle: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.foreground,
-    marginBottom: SPACING.md,
-  },
+  // 4. Quick Actions
   quickActionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.lg,
+    justifyContent: 'space-around',
+    marginBottom: SPACING.xl,
   },
-  quickAction: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.muted,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.md,
-    marginHorizontal: SPACING.xs,
-    minHeight: 88,
-    ...SHADOWS.raised.dark,
-  },
-  quickActionPressed: {
-    ...SHADOWS.pressed.dark,
-    opacity: 0.9,
-  },
-  quickActionIconContainer: {
-    width: 44,
-    height: 44,
+  quickActionCircle: {
+    width: 56,
+    height: 56,
     borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.bgCard,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.sm,
-    ...SHADOWS.raised.dark,
   },
   quickActionLabel: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.foreground,
+    fontWeight: TYPOGRAPHY.weights.medium,
+    color: COLORS.foregroundMuted,
   },
 
-  // Streak
-  streakCard: {
-    marginBottom: SPACING.md,
-  },
-  streakContent: {
+  // 5. Streak
+  streakSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: SPACING.sm,
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
   },
-  streakTextContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginLeft: SPACING.sm,
-  },
-  streakCount: {
+  streakText: {
     fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes['2xl'],
+    fontSize: TYPOGRAPHY.sizes.md,
     fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.foreground,
-    marginRight: SPACING.xs,
-  },
-  streakLabel: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.secondary,
-  },
-  streakMessage: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.secondary,
-    lineHeight: TYPOGRAPHY.sizes.sm * TYPOGRAPHY.lineHeights.normal,
+    color: COLORS.accent,
+    marginLeft: SPACING.sm,
   },
 
   // Welcome
@@ -454,15 +418,17 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.muted,
+    backgroundColor: COLORS.bgCard,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: SPACING.xl,
-    ...SHADOWS.raised.dark,
+    ...GLOW.primaryGlow,
   },
   welcomeTitle: {
     fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes['2xl'],
+    fontSize: TYPOGRAPHY.sizes['3xl'],
     fontWeight: TYPOGRAPHY.weights.bold,
     color: COLORS.foreground,
     textAlign: 'center',
@@ -472,7 +438,7 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.md,
     fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.secondary,
+    color: COLORS.foregroundMuted,
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.sizes.md * TYPOGRAPHY.lineHeights.relaxed,
     marginBottom: SPACING.xl,
@@ -486,12 +452,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     borderRadius: BORDER_RADIUS.lg,
     minHeight: 52,
+    ...GLOW.primaryGlow,
   },
   welcomeButtonText: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.md,
     fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.card,
+    color: '#FFFFFF',
     marginRight: SPACING.sm,
   },
 });

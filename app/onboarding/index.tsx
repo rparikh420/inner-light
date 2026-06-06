@@ -14,9 +14,17 @@ import {
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { COLORS, TYPOGRAPHY, SPACING, BORDER_RADIUS, SHADOWS, SCREEN_PADDING } from '../../src/constants/theme';
+import {
+  COLORS,
+  TYPOGRAPHY,
+  SPACING,
+  BORDER_RADIUS,
+  GLOW,
+  PRESS,
+  SCREEN_PADDING,
+} from '../../src/constants/theme';
 import GradientBackground from '../../src/components/GradientBackground';
-import NeumorphicCard from '../../src/components/NeumorphicCard';
+import Card from '../../src/components/Card';
 import { useIdentity, UserIdentity } from '../../src/hooks/useIdentity';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -68,31 +76,104 @@ function GoalChip({
   selected: boolean;
   onPress: () => void;
 }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scaleAnim, {
+      toValue: PRESS.scale,
+      ...PRESS.springConfig,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      ...PRESS.springConfig,
+    }).start();
+  };
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.goalChip,
-        selected ? styles.goalChipSelected : styles.goalChipUnselected,
-        pressed && !selected ? styles.goalChipPressed : null,
-      ]}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
     >
-      <Text
+      <Animated.View
         style={[
-          styles.goalChipText,
-          selected ? styles.goalChipTextSelected : null,
+          styles.goalChip,
+          selected ? styles.goalChipSelected : styles.goalChipUnselected,
+          { transform: [{ scale: scaleAnim }] },
         ]}
       >
-        {label}
-      </Text>
-      {selected && (
-        <Ionicons
-          name="checkmark-circle"
-          size={18}
-          color={COLORS.card}
-          style={styles.goalChipIcon}
-        />
-      )}
+        <Text
+          style={[
+            styles.goalChipText,
+            selected ? styles.goalChipTextSelected : null,
+          ]}
+        >
+          {label}
+        </Text>
+        {selected && (
+          <Ionicons
+            name="checkmark-circle"
+            size={18}
+            color={COLORS.foreground}
+            style={styles.goalChipIcon}
+          />
+        )}
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Animated Button with press feedback
+// ---------------------------------------------------------------------------
+
+function AnimatedButton({
+  onPress,
+  disabled,
+  style,
+  children,
+}: {
+  onPress: () => void;
+  disabled?: boolean;
+  style: any;
+  children: React.ReactNode;
+}) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    if (disabled) return;
+    Animated.spring(scaleAnim, {
+      toValue: PRESS.scale,
+      ...PRESS.springConfig,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      ...PRESS.springConfig,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      disabled={disabled}
+    >
+      <Animated.View
+        style={[
+          style,
+          { transform: [{ scale: scaleAnim }] },
+          disabled && styles.primaryButtonDisabled,
+        ]}
+      >
+        {children}
+      </Animated.View>
     </Pressable>
   );
 }
@@ -210,55 +291,50 @@ export default function OnboardingScreen() {
               />
               <Text style={styles.stepTitle}>Who are you becoming?</Text>
               <Text style={styles.stepSubtitle}>
-                Your journey begins with intention. Tell us who you are and who
-                you aspire to become.
+                Define the identity you want to step into
               </Text>
             </View>
 
-            <NeumorphicCard style={styles.inputCard}>
+            <Card style={styles.inputCard}>
               <Text style={styles.inputLabel}>Your name</Text>
               <TextInput
                 style={styles.textInput}
                 placeholder="Enter your name"
-                placeholderTextColor={COLORS.border}
+                placeholderTextColor={COLORS.foregroundMuted}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
                 returnKeyType="next"
               />
-            </NeumorphicCard>
+            </Card>
 
-            <NeumorphicCard style={styles.inputCard}>
+            <Card style={styles.inputCard}>
               <Text style={styles.inputLabel}>I want to become...</Text>
               <TextInput
                 style={[styles.textInput, styles.textInputMultiline]}
                 placeholder="A person who lives with purpose and inner peace"
-                placeholderTextColor={COLORS.border}
+                placeholderTextColor={COLORS.foregroundMuted}
                 value={intention}
                 onChangeText={setIntention}
                 multiline
                 numberOfLines={3}
                 textAlignVertical="top"
               />
-            </NeumorphicCard>
+            </Card>
 
-            <Pressable
+            <AnimatedButton
               onPress={handleNext}
               disabled={!canProceedStep0}
-              style={({ pressed }) => [
-                styles.primaryButton,
-                !canProceedStep0 && styles.primaryButtonDisabled,
-                pressed && canProceedStep0 && styles.primaryButtonPressed,
-              ]}
+              style={styles.primaryButton}
             >
-              <Text style={styles.primaryButtonText}>Continue</Text>
+              <Text style={styles.primaryButtonText}>Next</Text>
               <Ionicons
                 name="arrow-forward"
                 size={20}
-                color={COLORS.card}
+                color={COLORS.foreground}
                 style={styles.buttonIcon}
               />
-            </Pressable>
+            </AnimatedButton>
           </View>
         );
 
@@ -275,8 +351,7 @@ export default function OnboardingScreen() {
               />
               <Text style={styles.stepTitle}>Set your intentions</Text>
               <Text style={styles.stepSubtitle}>
-                Choose the areas of growth that matter most to you. These will
-                shape your daily practices.
+                Choose the areas of growth that matter most to you
               </Text>
             </View>
 
@@ -292,39 +367,32 @@ export default function OnboardingScreen() {
             </View>
 
             <View style={styles.navRow}>
-              <Pressable
+              <AnimatedButton
                 onPress={handleBack}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.secondaryButtonPressed,
-                ]}
+                style={styles.secondaryButton}
               >
                 <Ionicons
                   name="arrow-back"
                   size={20}
                   color={COLORS.primary}
-                  style={styles.buttonIcon}
+                  style={styles.buttonIconLeft}
                 />
                 <Text style={styles.secondaryButtonText}>Back</Text>
-              </Pressable>
+              </AnimatedButton>
 
-              <Pressable
+              <AnimatedButton
                 onPress={handleNext}
                 disabled={!canProceedStep1}
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  !canProceedStep1 && styles.primaryButtonDisabled,
-                  pressed && canProceedStep1 && styles.primaryButtonPressed,
-                ]}
+                style={styles.primaryButton}
               >
-                <Text style={styles.primaryButtonText}>Continue</Text>
+                <Text style={styles.primaryButtonText}>Next</Text>
                 <Ionicons
                   name="arrow-forward"
                   size={20}
-                  color={COLORS.card}
+                  color={COLORS.foreground}
                   style={styles.buttonIcon}
                 />
-              </Pressable>
+              </AnimatedButton>
             </View>
           </View>
         );
@@ -342,69 +410,62 @@ export default function OnboardingScreen() {
               />
               <Text style={styles.stepTitle}>Your journey begins</Text>
               <Text style={styles.stepSubtitle}>
-                Every great transformation starts with a single step. You have
-                already taken yours.
+                Every great transformation starts with a single step
               </Text>
             </View>
 
-            <NeumorphicCard style={styles.summaryCard}>
+            <Card style={styles.summaryCard}>
               <Text style={styles.summaryLabel}>Identity</Text>
-              <Text style={styles.summaryValue}>{name}</Text>
+              <Text style={styles.summaryNameValue}>{name}</Text>
 
               <View style={styles.summaryDivider} />
 
               <Text style={styles.summaryLabel}>Intention</Text>
-              <Text style={styles.summaryValue}>{intention}</Text>
+              <Text style={styles.summaryIntentionValue}>{intention}</Text>
 
               <View style={styles.summaryDivider} />
 
               <Text style={styles.summaryLabel}>Focus Areas</Text>
               <View style={styles.summaryGoalsRow}>
                 {selectedGoals.map((goal) => (
-                  <View key={goal} style={styles.summaryGoalTag}>
-                    <Text style={styles.summaryGoalTagText}>{goal}</Text>
+                  <View key={goal} style={styles.summaryGoalPill}>
+                    <Text style={styles.summaryGoalPillText}>{goal}</Text>
                   </View>
                 ))}
               </View>
-            </NeumorphicCard>
+            </Card>
 
             <Text style={styles.inspirationalText}>
-              The light you seek is already within you. Let us help you uncover
-              it, one mindful day at a time.
+              "The light you seek is already within you. Let us help you uncover
+              it, one mindful day at a time."
             </Text>
 
             <View style={styles.navRow}>
-              <Pressable
+              <AnimatedButton
                 onPress={handleBack}
-                style={({ pressed }) => [
-                  styles.secondaryButton,
-                  pressed && styles.secondaryButtonPressed,
-                ]}
+                style={styles.secondaryButton}
               >
                 <Ionicons
                   name="arrow-back"
                   size={20}
                   color={COLORS.primary}
-                  style={styles.buttonIcon}
+                  style={styles.buttonIconLeft}
                 />
                 <Text style={styles.secondaryButtonText}>Back</Text>
-              </Pressable>
+              </AnimatedButton>
 
-              <Pressable
+              <AnimatedButton
                 onPress={handleBegin}
-                style={({ pressed }) => [
-                  styles.beginButton,
-                  pressed && styles.beginButtonPressed,
-                ]}
+                style={styles.beginButton}
               >
                 <Text style={styles.beginButtonText}>Begin</Text>
                 <Ionicons
                   name="sunny-outline"
                   size={20}
-                  color={COLORS.card}
+                  color={COLORS.bgDeep}
                   style={styles.buttonIcon}
                 />
-              </Pressable>
+              </AnimatedButton>
             </View>
           </View>
         );
@@ -483,11 +544,10 @@ const styles = StyleSheet.create({
   stepDotActive: {
     backgroundColor: COLORS.primary,
     width: 28,
-    ...SHADOWS.raised.dark,
   },
 
   stepDotInactive: {
-    backgroundColor: COLORS.border,
+    backgroundColor: COLORS.bgCard,
   },
 
   // -- Animated container --
@@ -525,10 +585,9 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.md,
     fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foreground,
+    color: COLORS.foregroundMuted,
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.sizes.md * TYPOGRAPHY.lineHeights.relaxed,
-    opacity: 0.7,
     paddingHorizontal: SPACING.md,
   },
 
@@ -542,7 +601,7 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.sm,
     fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.primary,
+    color: COLORS.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: SPACING.sm,
@@ -552,9 +611,9 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.md,
     color: COLORS.foreground,
-    backgroundColor: COLORS.muted,
+    backgroundColor: COLORS.bgElevated,
     borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm + 4,
@@ -566,7 +625,7 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm + 4,
   },
 
-  // -- Goals grid --
+  // -- Goals grid (2x4) --
 
   goalsGrid: {
     flexDirection: 'row',
@@ -584,35 +643,32 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.xl,
     minHeight: 44,
     minWidth: 44,
+    width: (SCREEN_WIDTH - SCREEN_PADDING * 2 - 12) / 2,
+    justifyContent: 'center',
   },
 
   goalChipUnselected: {
-    backgroundColor: COLORS.muted,
-    borderWidth: 1,
+    backgroundColor: COLORS.bgCard,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
-    ...SHADOWS.raised.dark,
   },
 
   goalChipSelected: {
     backgroundColor: COLORS.primary,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.primary,
-    ...SHADOWS.pressed.dark,
-  },
-
-  goalChipPressed: {
-    ...SHADOWS.pressed.dark,
+    ...GLOW.primaryGlow,
   },
 
   goalChipText: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.foreground,
+    color: COLORS.foregroundMuted,
   },
 
   goalChipTextSelected: {
-    color: COLORS.card,
+    color: COLORS.foreground,
   },
 
   goalChipIcon: {
@@ -631,42 +687,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     minHeight: 48,
     minWidth: 44,
-    ...SHADOWS.raised.dark,
+    ...GLOW.primaryGlow,
   },
 
   primaryButtonDisabled: {
-    backgroundColor: COLORS.border,
-    ...SHADOWS.flat.dark,
-  },
-
-  primaryButtonPressed: {
-    ...SHADOWS.pressed.dark,
+    backgroundColor: COLORS.bgCard,
+    shadowOpacity: 0,
+    elevation: 0,
   },
 
   primaryButtonText: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.md,
     fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.card,
+    color: COLORS.foreground,
   },
 
   secondaryButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: COLORS.muted,
+    backgroundColor: COLORS.bgCard,
     borderRadius: BORDER_RADIUS.lg,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
     paddingVertical: SPACING.sm + 6,
     paddingHorizontal: SPACING.lg,
     minHeight: 48,
     minWidth: 44,
-    ...SHADOWS.raised.dark,
-  },
-
-  secondaryButtonPressed: {
-    ...SHADOWS.pressed.dark,
   },
 
   secondaryButtonText: {
@@ -686,22 +734,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xl,
     minHeight: 48,
     minWidth: 44,
-    ...SHADOWS.raised.dark,
-  },
-
-  beginButtonPressed: {
-    ...SHADOWS.pressed.dark,
+    flex: 1,
+    marginLeft: SPACING.sm,
+    ...GLOW.accentGlow,
   },
 
   beginButtonText: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.md,
     fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.card,
+    color: COLORS.bgDeep,
   },
 
   buttonIcon: {
     marginLeft: SPACING.sm,
+  },
+
+  buttonIconLeft: {
+    marginRight: SPACING.sm,
   },
 
   navRow: {
@@ -721,22 +771,30 @@ const styles = StyleSheet.create({
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.sm,
     fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.primary,
+    color: COLORS.secondary,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginBottom: SPACING.xs,
   },
 
-  summaryValue: {
+  summaryNameValue: {
     fontFamily: TYPOGRAPHY.fontFamily.heading,
     fontSize: TYPOGRAPHY.sizes.lg,
     fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.foreground,
+    color: COLORS.accent,
+    lineHeight: TYPOGRAPHY.sizes.lg * TYPOGRAPHY.lineHeights.normal,
+  },
+
+  summaryIntentionValue: {
+    fontFamily: TYPOGRAPHY.fontFamily.heading,
+    fontSize: TYPOGRAPHY.sizes.lg,
+    fontWeight: TYPOGRAPHY.weights.medium,
+    color: COLORS.accent,
     lineHeight: TYPOGRAPHY.sizes.lg * TYPOGRAPHY.lineHeights.normal,
   },
 
   summaryDivider: {
-    height: 1,
+    height: StyleSheet.hairlineWidth,
     backgroundColor: COLORS.border,
     marginVertical: SPACING.md,
   },
@@ -748,20 +806,20 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
   },
 
-  summaryGoalTag: {
-    backgroundColor: COLORS.muted,
+  summaryGoalPill: {
+    backgroundColor: COLORS.bgElevated,
     borderRadius: BORDER_RADIUS.full,
-    borderWidth: 1,
+    borderWidth: StyleSheet.hairlineWidth,
     borderColor: COLORS.border,
     paddingHorizontal: SPACING.sm + 4,
     paddingVertical: SPACING.xs + 2,
   },
 
-  summaryGoalTagText: {
+  summaryGoalPillText: {
     fontFamily: TYPOGRAPHY.fontFamily.body,
     fontSize: TYPOGRAPHY.sizes.sm,
     fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.primary,
+    color: COLORS.secondary,
   },
 
   inspirationalText: {
@@ -769,10 +827,9 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: TYPOGRAPHY.weights.regular,
     fontStyle: 'italic',
-    color: COLORS.foreground,
+    color: COLORS.foregroundMuted,
     textAlign: 'center',
     lineHeight: TYPOGRAPHY.sizes.base * TYPOGRAPHY.lineHeights.relaxed,
-    opacity: 0.6,
     paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.md,
   },
