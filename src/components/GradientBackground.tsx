@@ -10,28 +10,22 @@ interface Props {
 }
 
 /**
- * Screen wrapper with a subtle purple atmosphere.
- *
- * The gradient is barely perceptible — a faint violet wash at the top
- * that fades into warm black. It's felt more than seen, like ambient
- * light in a dark room. NOT a visible stripe or AI-purple gradient.
- *
- * Colors are extremely desaturated and dark — the purple is at ~5% visibility.
+ * Screen wrapper with a visible purple-to-black atmosphere.
+ * The purple is real and noticeable at the top, fading to warm black.
  */
 export default function GradientBackground({ children, padded = true }: Props) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      {/* Ambient purple glow — faint radial-like effect using stacked gradients */}
       <LinearGradient
         colors={[
-          '#13101A',   // very dark purple-tinted (barely visible)
-          '#0F0D14',   // transitioning
-          COLORS.bg,   // #0D0D0F warm black
-          COLORS.bg,   // stays black for bottom half
+          '#1A1030',   // visible dark purple at top
+          '#150E24',   // mid purple
+          '#0F0C18',   // fading
+          COLORS.bg,   // warm black
         ]}
-        locations={[0, 0.25, 0.5, 1]}
+        locations={[0, 0.2, 0.4, 0.7]}
         style={StyleSheet.absoluteFill}
       />
 
