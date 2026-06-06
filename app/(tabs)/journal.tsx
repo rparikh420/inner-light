@@ -8,7 +8,7 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-import { COLORS, TYPE, S, SCREEN_PADDING } from '../../src/constants/theme';
+import { COLORS, TYPE, S, SCREEN_PADDING, SURFACE, BUTTON } from '../../src/constants/theme';
 import { JOURNAL_PROMPTS, JournalPrompt } from '../../src/data/journal-prompts';
 import GradientBackground from '../../src/components/GradientBackground';
 import { useIdentity, JournalEntry } from '../../src/hooks/useIdentity';
@@ -96,7 +96,7 @@ export default function JournalScreen() {
         keyboardShouldPersistTaps="handled"
       >
         {/* prompt section */}
-        <View>
+        <View style={SURFACE.card}>
           <Text style={styles.categoryLabel}>
             {currentPrompt.category}
           </Text>
@@ -121,7 +121,7 @@ export default function JournalScreen() {
         <TextInput
           style={styles.textInput}
           placeholder="write..."
-          placeholderTextColor={COLORS.muted}
+          placeholderTextColor={COLORS.fgSecondary}
           multiline
           textAlignVertical="top"
           value={entryText}
@@ -131,14 +131,14 @@ export default function JournalScreen() {
         {/* 24px gap */}
         <View style={{ height: S.lg }} />
 
-        {/* action links */}
+        {/* action buttons */}
         {entryText.length > 0 ? (
           <Pressable
             onPress={handleSave}
             disabled={saving}
-            hitSlop={12}
+            style={[BUTTON.primary, saving && { opacity: 0.4 }]}
           >
-            <Text style={[styles.saveLink, saving && { opacity: 0.4 }]}>
+            <Text style={BUTTON.primaryText}>
               {saving ? 'saving...' : 'save'}
             </Text>
           </Pressable>
@@ -146,8 +146,8 @@ export default function JournalScreen() {
 
         <View style={{ height: S.sm }} />
 
-        <Pressable onPress={handleNewPrompt} hitSlop={12}>
-          <Text style={styles.newPromptLink}>new prompt</Text>
+        <Pressable onPress={handleNewPrompt} style={BUTTON.ghost}>
+          <Text style={BUTTON.ghostText}>new prompt</Text>
         </Pressable>
 
         {/* 64px gap */}
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   },
 
   categoryLabel: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 11,
     fontStyle: 'italic',
   },
@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
   },
 
   followUpText: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 14,
     fontStyle: 'italic',
   },
@@ -206,24 +206,12 @@ const styles = StyleSheet.create({
   textInput: {
     ...TYPE.body,
     fontSize: 16,
-    backgroundColor: 'transparent',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    borderRadius: 12,
     minHeight: 160,
-    paddingBottom: S.md,
-  },
-
-  saveLink: {
-    ...TYPE.accent,
-    fontSize: 14,
-    minHeight: 44,
-  },
-
-  newPromptLink: {
-    ...TYPE.muted,
-    fontSize: 14,
-    textDecorationLine: 'underline',
-    minHeight: 44,
+    padding: S.md,
   },
 
   rule: {
@@ -233,7 +221,7 @@ const styles = StyleSheet.create({
   },
 
   entryDate: {
-    ...TYPE.muted,
+    ...TYPE.secondary,
     fontSize: 11,
     marginBottom: S.xs,
   },
