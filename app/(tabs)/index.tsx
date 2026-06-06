@@ -5,25 +5,13 @@ import {
   ScrollView,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
   Image,
-  Animated,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import {
-  COLORS,
-  TYPOGRAPHY,
-  SPACING,
-  BORDER_RADIUS,
-  GLOW,
-  PRESS,
-  SCREEN_PADDING,
-} from '../../src/constants/theme';
+import { COLORS, TYPE, S, SCREEN_PADDING } from '../../src/constants/theme';
 import { useIdentity } from '../../src/hooks/useIdentity';
 import GradientBackground from '../../src/components/GradientBackground';
-import Card from '../../src/components/Card';
 import { TAROT_CARDS } from '../../src/data/tarot';
 import { getDailyItem } from '../../src/utils/shuffle';
 import { getCardImage } from '../../src/data/tarot-images';
@@ -34,122 +22,23 @@ import { getCardImage } from '../../src/data/tarot-images';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return 'good morning';
+  if (hour < 17) return 'good afternoon';
+  return 'good evening';
 }
 
 function getFormattedDate(): string {
-  return new Date().toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-  });
+  return new Date()
+    .toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    })
+    .toLowerCase();
 }
 
 // ---------------------------------------------------------------------------
-// Quick-action button
-// ---------------------------------------------------------------------------
-
-interface QuickActionProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  onPress: () => void;
-}
-
-function QuickAction({ icon, label, onPress }: QuickActionProps) {
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: PRESS.scale,
-      ...PRESS.springConfig,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      ...PRESS.springConfig,
-    }).start();
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      style={{ alignItems: 'center', flex: 1 }}
-    >
-      <Animated.View
-        style={[
-          styles.quickActionCircle,
-          { transform: [{ scale: scaleAnim }] },
-        ]}
-      >
-        <Ionicons name={icon} size={24} color={COLORS.primary} />
-      </Animated.View>
-      <Text style={styles.quickActionLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Welcome screen (not onboarded)
-// ---------------------------------------------------------------------------
-
-function WelcomeScreen() {
-  const scaleAnim = React.useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: PRESS.scale,
-      ...PRESS.springConfig,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      ...PRESS.springConfig,
-    }).start();
-  };
-
-  return (
-    <GradientBackground>
-      <View style={styles.welcomeContainer}>
-        <View style={styles.welcomeIconWrapper}>
-          <Ionicons name="sparkles-outline" size={48} color={COLORS.primary} />
-        </View>
-
-        <Text style={styles.welcomeTitle}>Inner Light</Text>
-
-        <Text style={styles.welcomeSubtitle}>
-          Discover your path through daily tarot, affirmations, and mindful journaling.
-        </Text>
-
-        <Pressable
-          onPress={() => router.push('/onboarding')}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-        >
-          <Animated.View
-            style={[
-              styles.welcomeButton,
-              { transform: [{ scale: scaleAnim }] },
-            ]}
-          >
-            <Text style={styles.welcomeButtonText}>Begin Your Journey</Text>
-            <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-          </Animated.View>
-        </Pressable>
-      </View>
-    </GradientBackground>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Home screen (onboarded)
+// Home screen
 // ---------------------------------------------------------------------------
 
 export default function HomeScreen() {
@@ -172,19 +61,24 @@ export default function HomeScreen() {
   // -- Loading state --------------------------------------------------------
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      </GradientBackground>
-    );
+    return <GradientBackground><View style={styles.blank} /></GradientBackground>;
   }
 
   // -- Not onboarded --------------------------------------------------------
 
   if (!isOnboarded || !identity) {
-    return <WelcomeScreen />;
+    return (
+      <GradientBackground>
+        <View style={styles.welcomeContainer}>
+          <Pressable
+            onPress={() => router.push('/onboarding')}
+            hitSlop={20}
+          >
+            <Text style={styles.welcomeText}>begin</Text>
+          </Pressable>
+        </View>
+      </GradientBackground>
+    );
   }
 
   // -- Onboarded home -------------------------------------------------------
@@ -195,68 +89,67 @@ export default function HomeScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* 1. Header -- greeting + date */}
-        <View style={styles.headerSection}>
-          <Text style={styles.greeting}>
-            {getGreeting()}, {identity.name}
-          </Text>
-          <Text style={styles.date}>{getFormattedDate()}</Text>
-        </View>
+        {/* greeting */}
+        <Text style={styles.greeting}>{getGreeting()}</Text>
+        <Text style={styles.date}>{getFormattedDate()}</Text>
 
-        {/* 2. Daily Card Preview */}
-        <Card
-          variant="default"
-          onPress={() => router.navigate('/(tabs)/tarot')}
-          style={styles.dailyCardContainer}
+        <View style={styles.gap64} />
+
+        {/* daily card */}
+        <Pressable
+          onPress={() => router.push('/(tabs)/tarot')}
+          hitSlop={{ top: 8, bottom: 8 }}
         >
-          <View style={styles.dailyCardContent}>
+          <View style={styles.dailyCardRow}>
             <Image
               source={cardImage}
               style={styles.dailyCardImage}
-              resizeMode="cover"
+              resizeMode="contain"
             />
             <View style={styles.dailyCardInfo}>
-              <Text style={styles.dailyCardLabel}>Today's Card</Text>
               <Text style={styles.dailyCardName}>{dailyCard.name}</Text>
-              <Text style={styles.dailyCardCta}>Tap to view full reading</Text>
+              <Text style={styles.dailyCardLabel}>your card today</Text>
             </View>
           </View>
-        </Card>
+          <View style={styles.hairline} />
+        </Pressable>
 
-        {/* 3. Identity / Intention Section */}
-        <View style={styles.identitySection}>
-          <Text style={styles.identityBecoming}>I am becoming...</Text>
-          <View style={styles.identityGlow}>
-            <Text style={styles.identityIntention}>{identity.intention}</Text>
+        <View style={styles.gap64} />
+
+        {/* identity / intention */}
+        {identity.intention ? (
+          <View>
+            <Text style={styles.becomingLabel}>i am becoming</Text>
+            <Text style={styles.intentionText}>{identity.intention}</Text>
           </View>
+        ) : null}
+
+        {identity.intention ? <View style={styles.gap64} /> : null}
+
+        {/* nav links */}
+        <View style={styles.linksRow}>
+          <Pressable onPress={() => router.navigate('/(tabs)/tarot')} hitSlop={12}>
+            <Text style={styles.linkText}>guidance</Text>
+          </Pressable>
+          <Text style={styles.linkDot}>  ·  </Text>
+          <Pressable onPress={() => router.navigate('/(tabs)/affirmations')} hitSlop={12}>
+            <Text style={styles.linkText}>affirm</Text>
+          </Pressable>
+          <Text style={styles.linkDot}>  ·  </Text>
+          <Pressable onPress={() => router.navigate('/(tabs)/journal')} hitSlop={12}>
+            <Text style={styles.linkText}>journal</Text>
+          </Pressable>
         </View>
 
-        {/* 4. Quick Actions */}
-        <View style={styles.quickActionsRow}>
-          <QuickAction
-            icon="sparkles"
-            label="Guidance"
-            onPress={() => router.navigate('/(tabs)/tarot')}
-          />
-          <QuickAction
-            icon="heart"
-            label="Affirm"
-            onPress={() => router.navigate('/(tabs)/affirmations')}
-          />
-          <QuickAction
-            icon="book"
-            label="Journal"
-            onPress={() => router.navigate('/(tabs)/journal')}
-          />
-        </View>
+        <View style={styles.gap40} />
 
-        {/* 5. Streak */}
-        <View style={styles.streakSection}>
-          <Ionicons name="flame" size={24} color={COLORS.accent} />
-          <Text style={styles.streakText}>
-            {streak} day streak
-          </Text>
-        </View>
+        {/* streak */}
+        {streak > 0 ? (
+          <View style={styles.streakRow}>
+            <Text style={styles.streakNumber}>{streak}</Text>
+            <Text style={styles.streakLabel}> days</Text>
+          </View>
+        ) : null}
       </ScrollView>
     </GradientBackground>
   );
@@ -267,198 +160,114 @@ export default function HomeScreen() {
 // ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
-  // Loading
-  loadingContainer: {
+  blank: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
 
-  // Scroll
   scrollContent: {
     paddingHorizontal: SCREEN_PADDING,
-    paddingBottom: SPACING.xxl,
+    paddingTop: S.xl,
+    paddingBottom: S.xxl,
   },
 
-  // 1. Header
-  headerSection: {
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.lg,
-  },
+  // greeting
   greeting: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes['2xl'],
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.foreground,
-    lineHeight: TYPOGRAPHY.sizes['2xl'] * TYPOGRAPHY.lineHeights.tight,
+    ...TYPE.accent,
+    fontSize: 28,
   },
   date: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foregroundMuted,
-    marginTop: SPACING.xs,
+    ...TYPE.muted,
+    fontSize: 13,
+    marginTop: S.xs,
   },
 
-  // 2. Daily Card Preview
-  dailyCardContainer: {
-    marginBottom: SPACING.lg,
+  // gaps
+  gap64: {
+    height: S.xxl,
   },
-  dailyCardContent: {
+  gap40: {
+    height: S.xl,
+  },
+
+  // daily card
+  dailyCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   dailyCardImage: {
-    width: 60,
-    height: 100,
-    borderRadius: BORDER_RADIUS.sm,
+    width: 48,
+    height: 80,
+    borderRadius: 2,
   },
   dailyCardInfo: {
+    marginLeft: S.md,
     flex: 1,
-    marginLeft: SPACING.md,
-  },
-  dailyCardLabel: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.xs,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.foregroundMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: SPACING.xs,
   },
   dailyCardName: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.xl,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.accent,
-    marginBottom: SPACING.xs,
+    ...TYPE.accent,
+    fontSize: 16,
   },
-  dailyCardCta: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foregroundMuted,
+  dailyCardLabel: {
+    ...TYPE.muted,
+    fontSize: 12,
+    marginTop: S.xs,
   },
-
-  // 3. Identity Section
-  identitySection: {
-    marginBottom: SPACING.lg,
-    alignItems: 'center',
-  },
-  identityBecoming: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foregroundMuted,
-    marginBottom: SPACING.sm,
-  },
-  identityGlow: {
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    borderRadius: BORDER_RADIUS.lg,
-    backgroundColor: COLORS.accentGlow,
-    ...GLOW.accentGlow,
-  },
-  identityIntention: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.lg,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.accent,
-    textAlign: 'center',
-    lineHeight: TYPOGRAPHY.sizes.lg * TYPOGRAPHY.lineHeights.normal,
+  hairline: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.border,
+    marginTop: S.md,
   },
 
-  // 4. Quick Actions
-  quickActionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: SPACING.xl,
+  // identity
+  becomingLabel: {
+    ...TYPE.muted,
+    fontSize: 13,
+    fontStyle: 'italic',
   },
-  quickActionCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.bgCard,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  quickActionLabel: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.foregroundMuted,
+  intentionText: {
+    ...TYPE.heading,
+    fontSize: 22,
+    marginTop: S.sm,
+    lineHeight: 30,
   },
 
-  // 5. Streak
-  streakSection: {
+  // nav links
+  linksRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: SPACING.md,
   },
-  streakText: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.accent,
-    marginLeft: SPACING.sm,
+  linkText: {
+    ...TYPE.muted,
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  linkDot: {
+    ...TYPE.muted,
+    fontSize: 14,
   },
 
-  // Welcome
+  // streak
+  streakRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  streakNumber: {
+    ...TYPE.accent,
+    fontSize: 14,
+  },
+  streakLabel: {
+    ...TYPE.muted,
+    fontSize: 14,
+  },
+
+  // welcome
   welcomeContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: SCREEN_PADDING,
   },
-  welcomeIconWrapper: {
-    width: 88,
-    height: 88,
-    borderRadius: BORDER_RADIUS.full,
-    backgroundColor: COLORS.bgCard,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.xl,
-    ...GLOW.primaryGlow,
-  },
-  welcomeTitle: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes['3xl'],
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.foreground,
-    textAlign: 'center',
-    marginBottom: SPACING.md,
-  },
-  welcomeSubtitle: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foregroundMuted,
-    textAlign: 'center',
-    lineHeight: TYPOGRAPHY.sizes.md * TYPOGRAPHY.lineHeights.relaxed,
-    marginBottom: SPACING.xl,
-    paddingHorizontal: SPACING.lg,
-  },
-  welcomeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.primary,
-    paddingVertical: SPACING.md,
-    paddingHorizontal: SPACING.xl,
-    borderRadius: BORDER_RADIUS.lg,
-    minHeight: 52,
-    ...GLOW.primaryGlow,
-  },
-  welcomeButtonText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: '#FFFFFF',
-    marginRight: SPACING.sm,
+  welcomeText: {
+    ...TYPE.heading,
+    fontSize: 32,
   },
 });
