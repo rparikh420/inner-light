@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-import { COLORS, TYPE, S, SCREEN_PADDING } from '../../src/constants/theme';
+import { COLORS, TYPE, S, SCREEN_PADDING, RADIUS } from '../../src/constants/theme';
 import { AFFIRMATION_CATEGORIES, Affirmation } from '../../src/data/affirmations';
 import GradientBackground from '../../src/components/GradientBackground';
 
@@ -65,30 +65,30 @@ export default function AffirmationsScreen() {
           contentContainerStyle={styles.categoryRow}
           style={styles.categoryScroll}
         >
-          {AFFIRMATION_CATEGORIES.map((cat, i) => {
+          {AFFIRMATION_CATEGORIES.map((cat) => {
             const isActive = cat.id === selectedCategoryId;
             return (
-              <React.Fragment key={cat.id}>
-                {i > 0 && (
-                  <Text style={styles.categorySeparator}>{'  ·  '}</Text>
-                )}
-                <Pressable
-                  onPress={() => handleCategoryPress(cat.id)}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isActive }}
-                  accessibilityLabel={cat.name}
+              <Pressable
+                key={cat.id}
+                onPress={() => handleCategoryPress(cat.id)}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityState={{ selected: isActive }}
+                accessibilityLabel={cat.name}
+                style={[
+                  styles.categoryPill,
+                  isActive ? styles.categoryPillActive : styles.categoryPillInactive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.categoryText,
+                    isActive ? styles.categoryActive : styles.categoryInactive,
+                  ]}
                 >
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      isActive ? styles.categoryActive : styles.categoryInactive,
-                    ]}
-                  >
-                    {cat.name.toLowerCase()}
-                  </Text>
-                </Pressable>
-              </React.Fragment>
+                  {cat.name.toLowerCase()}
+                </Text>
+              </Pressable>
             );
           })}
         </ScrollView>
@@ -217,23 +217,31 @@ const styles = StyleSheet.create({
   categoryRow: {
     paddingHorizontal: SCREEN_PADDING,
     alignItems: 'center',
+    gap: S.sm,
   },
-  categorySeparator: {
-    fontFamily: TYPE.muted.fontFamily,
-    fontSize: 14,
-    color: COLORS.muted,
+  categoryPill: {
+    borderRadius: RADIUS.pill,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  categoryPillActive: {
+    backgroundColor: COLORS.accentSoft,
+    borderColor: COLORS.accentBorder,
+  },
+  categoryPillInactive: {
+    backgroundColor: COLORS.surface,
+    borderColor: COLORS.border,
   },
   categoryText: {
     fontFamily: TYPE.body.fontFamily,
     fontSize: 14,
-    minHeight: 44,
-    lineHeight: 44,
   },
   categoryActive: {
     color: COLORS.fg,
   },
   categoryInactive: {
-    color: COLORS.muted,
+    color: COLORS.fgSecondary,
   },
 
   // -- page area --
@@ -265,9 +273,9 @@ const styles = StyleSheet.create({
 
   // -- page indicator --
   pageIndicator: {
-    fontFamily: TYPE.muted.fontFamily,
+    fontFamily: TYPE.secondary.fontFamily,
     fontSize: 12,
-    color: COLORS.muted,
+    color: COLORS.fgSecondary,
     textAlign: 'center',
     marginTop: S.md,
   },
@@ -280,13 +288,13 @@ const styles = StyleSheet.create({
     gap: S.xs,
   },
   affirmedCount: {
-    fontFamily: TYPE.muted.fontFamily,
+    fontFamily: TYPE.secondary.fontFamily,
     fontSize: 12,
-    color: COLORS.muted,
+    color: COLORS.fgSecondary,
   },
   holdHint: {
-    fontFamily: TYPE.muted.fontFamily,
-    fontSize: 12,
-    color: COLORS.muted,
+    fontFamily: TYPE.secondary.fontFamily,
+    fontSize: 13,
+    color: COLORS.fgSecondary,
   },
 });
