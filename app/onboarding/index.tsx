@@ -9,22 +9,11 @@ import {
   Dimensions,
   Platform,
   KeyboardAvoidingView,
-  ScrollView,
 } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
-import {
-  COLORS,
-  TYPOGRAPHY,
-  SPACING,
-  BORDER_RADIUS,
-  GLOW,
-  PRESS,
-  SCREEN_PADDING,
-} from '../../src/constants/theme';
+import { COLORS, TYPE, S, SCREEN_PADDING } from '../../src/constants/theme';
 import GradientBackground from '../../src/components/GradientBackground';
-import Card from '../../src/components/Card';
 import { useIdentity, UserIdentity } from '../../src/hooks/useIdentity';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -55,126 +44,14 @@ function StepIndicator({ currentStep }: { currentStep: number }) {
           key={i}
           style={[
             styles.stepDot,
-            i === currentStep ? styles.stepDotActive : styles.stepDotInactive,
+            {
+              backgroundColor:
+                i === currentStep ? COLORS.fg : COLORS.muted,
+            },
           ]}
         />
       ))}
     </View>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Goal Chip
-// ---------------------------------------------------------------------------
-
-function GoalChip({
-  label,
-  selected,
-  onPress,
-}: {
-  label: string;
-  selected: boolean;
-  onPress: () => void;
-}) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: PRESS.scale,
-      ...PRESS.springConfig,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      ...PRESS.springConfig,
-    }).start();
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-    >
-      <Animated.View
-        style={[
-          styles.goalChip,
-          selected ? styles.goalChipSelected : styles.goalChipUnselected,
-          { transform: [{ scale: scaleAnim }] },
-        ]}
-      >
-        <Text
-          style={[
-            styles.goalChipText,
-            selected ? styles.goalChipTextSelected : null,
-          ]}
-        >
-          {label}
-        </Text>
-        {selected && (
-          <Ionicons
-            name="checkmark-circle"
-            size={18}
-            color={COLORS.foreground}
-            style={styles.goalChipIcon}
-          />
-        )}
-      </Animated.View>
-    </Pressable>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Animated Button with press feedback
-// ---------------------------------------------------------------------------
-
-function AnimatedButton({
-  onPress,
-  disabled,
-  style,
-  children,
-}: {
-  onPress: () => void;
-  disabled?: boolean;
-  style: any;
-  children: React.ReactNode;
-}) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  const handlePressIn = () => {
-    if (disabled) return;
-    Animated.spring(scaleAnim, {
-      toValue: PRESS.scale,
-      ...PRESS.springConfig,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      ...PRESS.springConfig,
-    }).start();
-  };
-
-  return (
-    <Pressable
-      onPress={onPress}
-      onPressIn={handlePressIn}
-      onPressOut={handlePressOut}
-      disabled={disabled}
-    >
-      <Animated.View
-        style={[
-          style,
-          { transform: [{ scale: scaleAnim }] },
-          disabled && styles.primaryButtonDisabled,
-        ]}
-      >
-        {children}
-      </Animated.View>
-    </Pressable>
   );
 }
 
@@ -191,39 +68,23 @@ export default function OnboardingScreen() {
   const [selectedGoals, setSelectedGoals] = useState<GoalOption[]>([]);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const slideAnim = useRef(new Animated.Value(0)).current;
 
   // -----------------------------------------------------------------------
-  // Animate step transition
+  // Animate step transition (fade only)
   // -----------------------------------------------------------------------
 
   const animateTransition = (nextStep: number) => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(slideAnim, {
-        toValue: -40,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
+    Animated.timing(fadeAnim, {
+      toValue: 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start(() => {
       setStep(nextStep);
-      slideAnim.setValue(40);
-      Animated.parallel([
-        Animated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-        Animated.timing(slideAnim, {
-          toValue: 0,
-          duration: 300,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
     });
   };
 
@@ -247,17 +108,11 @@ export default function OnboardingScreen() {
     }
   };
 
-  const handleBack = () => {
-    if (step > 0) {
-      animateTransition(step - 1);
-    }
-  };
-
   const handleBegin = async () => {
     const identity: UserIdentity = {
       name: name.trim(),
       intention: intention.trim(),
-      goals: selectedGoals,
+      goals: selectedGoals as unknown as string[],
       createdAt: new Date().toISOString(),
     };
 
@@ -269,7 +124,8 @@ export default function OnboardingScreen() {
   // Can proceed?
   // -----------------------------------------------------------------------
 
-  const canProceedStep0 = name.trim().length > 0 && intention.trim().length > 0;
+  const canProceedStep0 =
+    name.trim().length > 0 && intention.trim().length > 0;
   const canProceedStep1 = selectedGoals.length > 0;
 
   // -----------------------------------------------------------------------
@@ -282,59 +138,52 @@ export default function OnboardingScreen() {
       case 0:
         return (
           <View style={styles.stepContent}>
-            <View style={styles.stepHeaderSection}>
-              <Ionicons
-                name="person-outline"
-                size={40}
-                color={COLORS.primary}
-                style={styles.stepIcon}
-              />
-              <Text style={styles.stepTitle}>Who are you becoming?</Text>
-              <Text style={styles.stepSubtitle}>
-                Define the identity you want to step into
-              </Text>
-            </View>
+            <View style={styles.centerSection}>
+              <Text style={styles.title}>who are you becoming?</Text>
 
-            <Card style={styles.inputCard}>
-              <Text style={styles.inputLabel}>Your name</Text>
+              <View style={{ height: S.xl + S.sm }} />
+
               <TextInput
-                style={styles.textInput}
-                placeholder="Enter your name"
-                placeholderTextColor={COLORS.foregroundMuted}
+                style={styles.hairlineInput}
+                placeholder="your name"
+                placeholderTextColor={COLORS.muted}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
                 returnKeyType="next"
+                textAlign="center"
               />
-            </Card>
 
-            <Card style={styles.inputCard}>
-              <Text style={styles.inputLabel}>I want to become...</Text>
+              <View style={{ height: S.lg }} />
+
               <TextInput
-                style={[styles.textInput, styles.textInputMultiline]}
-                placeholder="A person who lives with purpose and inner peace"
-                placeholderTextColor={COLORS.foregroundMuted}
+                style={[styles.hairlineInput, styles.intentionInput]}
+                placeholder="i want to become..."
+                placeholderTextColor={COLORS.muted}
                 value={intention}
                 onChangeText={setIntention}
                 multiline
-                numberOfLines={3}
+                textAlign="center"
                 textAlignVertical="top"
               />
-            </Card>
+            </View>
 
-            <AnimatedButton
-              onPress={handleNext}
-              disabled={!canProceedStep0}
-              style={styles.primaryButton}
-            >
-              <Text style={styles.primaryButtonText}>Next</Text>
-              <Ionicons
-                name="arrow-forward"
-                size={20}
-                color={COLORS.foreground}
-                style={styles.buttonIcon}
-              />
-            </AnimatedButton>
+            <View style={styles.bottomAction}>
+              <Pressable
+                onPress={handleNext}
+                disabled={!canProceedStep0}
+                hitSlop={12}
+              >
+                <Text
+                  style={[
+                    styles.actionLink,
+                    !canProceedStep0 && styles.actionLinkDisabled,
+                  ]}
+                >
+                  next
+                </Text>
+              </Pressable>
+            </View>
           </View>
         );
 
@@ -342,57 +191,56 @@ export default function OnboardingScreen() {
       case 1:
         return (
           <View style={styles.stepContent}>
-            <View style={styles.stepHeaderSection}>
-              <Ionicons
-                name="compass-outline"
-                size={40}
-                color={COLORS.primary}
-                style={styles.stepIcon}
-              />
-              <Text style={styles.stepTitle}>Set your intentions</Text>
-              <Text style={styles.stepSubtitle}>
-                Choose the areas of growth that matter most to you
+            <View style={styles.centerSection}>
+              <Text style={[styles.title, { fontSize: 28 }]}>
+                set your intentions
               </Text>
+
+              <View style={{ height: S.xl }} />
+
+              <View style={styles.goalsWrap}>
+                {GOAL_OPTIONS.map((goal, i) => (
+                  <React.Fragment key={goal}>
+                    <Pressable
+                      onPress={() => toggleGoal(goal)}
+                      hitSlop={8}
+                    >
+                      <Text
+                        style={[
+                          styles.goalText,
+                          {
+                            color: selectedGoals.includes(goal)
+                              ? COLORS.fg
+                              : COLORS.muted,
+                          },
+                        ]}
+                      >
+                        {goal}
+                      </Text>
+                    </Pressable>
+                    {i < GOAL_OPTIONS.length - 1 && (
+                      <Text style={styles.goalSeparator}>  ·  </Text>
+                    )}
+                  </React.Fragment>
+                ))}
+              </View>
             </View>
 
-            <View style={styles.goalsGrid}>
-              {GOAL_OPTIONS.map((goal) => (
-                <GoalChip
-                  key={goal}
-                  label={goal}
-                  selected={selectedGoals.includes(goal)}
-                  onPress={() => toggleGoal(goal)}
-                />
-              ))}
-            </View>
-
-            <View style={styles.navRow}>
-              <AnimatedButton
-                onPress={handleBack}
-                style={styles.secondaryButton}
-              >
-                <Ionicons
-                  name="arrow-back"
-                  size={20}
-                  color={COLORS.primary}
-                  style={styles.buttonIconLeft}
-                />
-                <Text style={styles.secondaryButtonText}>Back</Text>
-              </AnimatedButton>
-
-              <AnimatedButton
+            <View style={styles.bottomAction}>
+              <Pressable
                 onPress={handleNext}
                 disabled={!canProceedStep1}
-                style={styles.primaryButton}
+                hitSlop={12}
               >
-                <Text style={styles.primaryButtonText}>Next</Text>
-                <Ionicons
-                  name="arrow-forward"
-                  size={20}
-                  color={COLORS.foreground}
-                  style={styles.buttonIcon}
-                />
-              </AnimatedButton>
+                <Text
+                  style={[
+                    styles.actionLink,
+                    !canProceedStep1 && styles.actionLinkDisabled,
+                  ]}
+                >
+                  next
+                </Text>
+              </Pressable>
             </View>
           </View>
         );
@@ -401,71 +249,20 @@ export default function OnboardingScreen() {
       case 2:
         return (
           <View style={styles.stepContent}>
-            <View style={styles.stepHeaderSection}>
-              <Ionicons
-                name="sparkles-outline"
-                size={40}
-                color={COLORS.accent}
-                style={styles.stepIcon}
-              />
-              <Text style={styles.stepTitle}>Your journey begins</Text>
-              <Text style={styles.stepSubtitle}>
-                Every great transformation starts with a single step
+            <View style={styles.centerSection}>
+              <Text style={styles.intentionDisplay}>{intention}</Text>
+
+              <View style={{ height: S.md }} />
+
+              <Text style={styles.goalsDisplay}>
+                {selectedGoals.join('  ·  ')}
               </Text>
-            </View>
 
-            <Card style={styles.summaryCard}>
-              <Text style={styles.summaryLabel}>Identity</Text>
-              <Text style={styles.summaryNameValue}>{name}</Text>
+              <View style={{ height: S.xxl }} />
 
-              <View style={styles.summaryDivider} />
-
-              <Text style={styles.summaryLabel}>Intention</Text>
-              <Text style={styles.summaryIntentionValue}>{intention}</Text>
-
-              <View style={styles.summaryDivider} />
-
-              <Text style={styles.summaryLabel}>Focus Areas</Text>
-              <View style={styles.summaryGoalsRow}>
-                {selectedGoals.map((goal) => (
-                  <View key={goal} style={styles.summaryGoalPill}>
-                    <Text style={styles.summaryGoalPillText}>{goal}</Text>
-                  </View>
-                ))}
-              </View>
-            </Card>
-
-            <Text style={styles.inspirationalText}>
-              "The light you seek is already within you. Let us help you uncover
-              it, one mindful day at a time."
-            </Text>
-
-            <View style={styles.navRow}>
-              <AnimatedButton
-                onPress={handleBack}
-                style={styles.secondaryButton}
-              >
-                <Ionicons
-                  name="arrow-back"
-                  size={20}
-                  color={COLORS.primary}
-                  style={styles.buttonIconLeft}
-                />
-                <Text style={styles.secondaryButtonText}>Back</Text>
-              </AnimatedButton>
-
-              <AnimatedButton
-                onPress={handleBegin}
-                style={styles.beginButton}
-              >
-                <Text style={styles.beginButtonText}>Begin</Text>
-                <Ionicons
-                  name="sunny-outline"
-                  size={20}
-                  color={COLORS.bgDeep}
-                  style={styles.buttonIcon}
-                />
-              </AnimatedButton>
+              <Pressable onPress={handleBegin} hitSlop={12}>
+                <Text style={styles.beginText}>begin</Text>
+              </Pressable>
             </View>
           </View>
         );
@@ -485,25 +282,18 @@ export default function OnboardingScreen() {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
+        <View style={styles.container}>
           <StepIndicator currentStep={step} />
 
           <Animated.View
             style={[
               styles.animatedContainer,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateX: slideAnim }],
-              },
+              { opacity: fadeAnim },
             ]}
           >
             {renderStep()}
           </Animated.View>
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
     </GradientBackground>
   );
@@ -518,11 +308,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  scrollContent: {
-    flexGrow: 1,
+  container: {
+    flex: 1,
     paddingHorizontal: SCREEN_PADDING,
-    paddingTop: SPACING.lg,
-    paddingBottom: SPACING.xxl,
+    paddingTop: S.lg,
   },
 
   // -- Step Indicator --
@@ -531,23 +320,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: SPACING.sm,
-    marginBottom: SPACING.xl,
+    gap: 8,
+    marginBottom: S.xl,
   },
 
   stepDot: {
-    width: 10,
-    height: 10,
-    borderRadius: BORDER_RADIUS.full,
-  },
-
-  stepDotActive: {
-    backgroundColor: COLORS.primary,
-    width: 28,
-  },
-
-  stepDotInactive: {
-    backgroundColor: COLORS.bgCard,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 
   // -- Animated container --
@@ -560,277 +340,104 @@ const styles = StyleSheet.create({
 
   stepContent: {
     flex: 1,
-  },
-
-  stepHeaderSection: {
-    alignItems: 'center',
-    marginBottom: SPACING.xl,
-  },
-
-  stepIcon: {
-    marginBottom: SPACING.md,
-  },
-
-  stepTitle: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes['2xl'],
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.foreground,
-    textAlign: 'center',
-    lineHeight: TYPOGRAPHY.sizes['2xl'] * TYPOGRAPHY.lineHeights.tight,
-    marginBottom: SPACING.sm,
-  },
-
-  stepSubtitle: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    color: COLORS.foregroundMuted,
-    textAlign: 'center',
-    lineHeight: TYPOGRAPHY.sizes.md * TYPOGRAPHY.lineHeights.relaxed,
-    paddingHorizontal: SPACING.md,
-  },
-
-  // -- Input card --
-
-  inputCard: {
-    marginBottom: SPACING.md,
-  },
-
-  inputLabel: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: SPACING.sm,
-  },
-
-  textInput: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    color: COLORS.foreground,
-    backgroundColor: COLORS.bgElevated,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 4,
-    minHeight: 44,
-  },
-
-  textInputMultiline: {
-    minHeight: 88,
-    paddingTop: SPACING.sm + 4,
-  },
-
-  // -- Goals grid (2x4) --
-
-  goalsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: SPACING.sm + 4,
-    marginBottom: SPACING.xl,
-  },
-
-  goalChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm + 4,
-    borderRadius: BORDER_RADIUS.xl,
-    minHeight: 44,
-    minWidth: 44,
-    width: (SCREEN_WIDTH - SCREEN_PADDING * 2 - 12) / 2,
-    justifyContent: 'center',
-  },
-
-  goalChipUnselected: {
-    backgroundColor: COLORS.bgCard,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-  },
-
-  goalChipSelected: {
-    backgroundColor: COLORS.primary,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.primary,
-    ...GLOW.primaryGlow,
-  },
-
-  goalChipText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.foregroundMuted,
-  },
-
-  goalChipTextSelected: {
-    color: COLORS.foreground,
-  },
-
-  goalChipIcon: {
-    marginLeft: SPACING.xs,
-  },
-
-  // -- Buttons --
-
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.primary,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.sm + 6,
-    paddingHorizontal: SPACING.xl,
-    minHeight: 48,
-    minWidth: 44,
-    ...GLOW.primaryGlow,
-  },
-
-  primaryButtonDisabled: {
-    backgroundColor: COLORS.bgCard,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-
-  primaryButtonText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.foreground,
-  },
-
-  secondaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.bgCard,
-    borderRadius: BORDER_RADIUS.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    paddingVertical: SPACING.sm + 6,
-    paddingHorizontal: SPACING.lg,
-    minHeight: 48,
-    minWidth: 44,
-  },
-
-  secondaryButtonText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.primary,
-  },
-
-  beginButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.accent,
-    borderRadius: BORDER_RADIUS.lg,
-    paddingVertical: SPACING.sm + 6,
-    paddingHorizontal: SPACING.xl,
-    minHeight: 48,
-    minWidth: 44,
-    flex: 1,
-    marginLeft: SPACING.sm,
-    ...GLOW.accentGlow,
-  },
-
-  beginButtonText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.md,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.bgDeep,
-  },
-
-  buttonIcon: {
-    marginLeft: SPACING.sm,
-  },
-
-  buttonIconLeft: {
-    marginRight: SPACING.sm,
-  },
-
-  navRow: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+
+  centerSection: {
+    flex: 1,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginTop: SPACING.lg,
   },
 
-  // -- Summary --
+  // -- Typography --
 
-  summaryCard: {
-    marginBottom: SPACING.lg,
+  title: {
+    ...TYPE.heading,
+    fontSize: 32,
+    textAlign: 'center',
+    lineHeight: 40,
   },
 
-  summaryLabel: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.secondary,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: SPACING.xs,
+  // -- Inputs --
+
+  hairlineInput: {
+    ...TYPE.body,
+    fontSize: 18,
+    color: COLORS.fg,
+    textAlign: 'center',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: COLORS.muted,
+    paddingVertical: S.sm,
+    width: '100%',
+    minHeight: 44,
   },
 
-  summaryNameValue: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.lg,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.accent,
-    lineHeight: TYPOGRAPHY.sizes.lg * TYPOGRAPHY.lineHeights.normal,
+  intentionInput: {
+    minHeight: 64,
   },
 
-  summaryIntentionValue: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.lg,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.accent,
-    lineHeight: TYPOGRAPHY.sizes.lg * TYPOGRAPHY.lineHeights.normal,
-  },
+  // -- Goals --
 
-  summaryDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: COLORS.border,
-    marginVertical: SPACING.md,
-  },
-
-  summaryGoalsRow: {
+  goalsWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.sm,
-    marginTop: SPACING.xs,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: S.md,
   },
 
-  summaryGoalPill: {
-    backgroundColor: COLORS.bgElevated,
-    borderRadius: BORDER_RADIUS.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-    paddingHorizontal: SPACING.sm + 4,
-    paddingVertical: SPACING.xs + 2,
+  goalText: {
+    ...TYPE.body,
+    fontSize: 16,
+    lineHeight: 32,
   },
 
-  summaryGoalPillText: {
-    fontFamily: TYPOGRAPHY.fontFamily.body,
-    fontSize: TYPOGRAPHY.sizes.sm,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.secondary,
+  goalSeparator: {
+    ...TYPE.muted,
+    fontSize: 16,
+    lineHeight: 32,
   },
 
-  inspirationalText: {
-    fontFamily: TYPOGRAPHY.fontFamily.heading,
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.regular,
-    fontStyle: 'italic',
-    color: COLORS.foregroundMuted,
+  // -- Bottom action --
+
+  bottomAction: {
+    alignItems: 'center',
+    paddingBottom: S.xxl,
+  },
+
+  actionLink: {
+    ...TYPE.muted,
+    fontSize: 14,
+    textDecorationLine: 'underline',
+    minHeight: 44,
+    textAlignVertical: 'center',
+    lineHeight: 44,
+  },
+
+  actionLinkDisabled: {
+    opacity: 0.3,
+  },
+
+  // -- Step 3 --
+
+  intentionDisplay: {
+    ...TYPE.accent,
+    fontSize: 24,
     textAlign: 'center',
-    lineHeight: TYPOGRAPHY.sizes.base * TYPOGRAPHY.lineHeights.relaxed,
-    paddingHorizontal: SPACING.lg,
-    marginBottom: SPACING.md,
+    lineHeight: 34,
+  },
+
+  goalsDisplay: {
+    ...TYPE.muted,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  beginText: {
+    ...TYPE.heading,
+    fontSize: 32,
+    textAlign: 'center',
+    lineHeight: 40,
   },
 });
