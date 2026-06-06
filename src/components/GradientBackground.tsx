@@ -1,32 +1,33 @@
 import React from 'react';
-import { StyleSheet, StatusBar } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { View, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
+import { COLORS, SCREEN_PADDING } from '../constants/theme';
 
-interface GradientBackgroundProps {
+interface Props {
   children: React.ReactNode;
+  padded?: boolean;
 }
 
-export default function GradientBackground({ children }: GradientBackgroundProps) {
+export default function GradientBackground({ children, padded = true }: Props) {
   return (
-    <LinearGradient
-      colors={[COLORS.bgBase, COLORS.bgDeep]}
-      style={styles.gradient}
-    >
+    <View style={styles.container}>
       <StatusBar barStyle="light-content" />
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={[styles.safe, padded && styles.padded]}>
         {children}
       </SafeAreaView>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradient: {
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  safe: {
     flex: 1,
   },
-  safeArea: {
-    flex: 1,
+  padded: {
+    paddingHorizontal: SCREEN_PADDING,
   },
 });
