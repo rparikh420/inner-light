@@ -1,6 +1,5 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
-  Animated,
   Dimensions,
   FlatList,
   Pressable,
@@ -11,12 +10,18 @@ import {
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { COLORS, TYPE, S, SCREEN_PADDING, RADIUS, BUTTON } from '../../src/constants/theme';
+import { COLORS, TYPE, S, SCREEN_PADDING, RADIUS } from '../../src/constants/theme';
 import { AFFIRMATION_CATEGORIES, Affirmation } from '../../src/data/affirmations';
 import GradientBackground from '../../src/components/GradientBackground';
+import VoiceProgressRing from '../../src/components/VoiceProgressRing';
+import { useSpeechToText } from '../../src/hooks/useSpeechToText';
+import { speechMatchRatio } from '../../src/utils/speechMatch';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const HOLD_DURATION = 600;
+const REQUIRED_REPETITIONS = 3;
+const MATCH_THRESHOLD = 0.65;
+
+const ALL_AFFIRMATIONS = AFFIRMATION_CATEGORIES.flatMap((c) => c.affirmations);
 
 export default function AffirmationsScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState(AFFIRMATION_CATEGORIES[0].id);
@@ -24,15 +29,50 @@ export default function AffirmationsScreen() {
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // -- voice affirmation session (one shared recognizer; one active affirmation at a time) --
+  const speech = useSpeechToText();
+  const [speakingId, setSpeakingId] = useState<number | null>(null);
+  const [repCounts, setRepCounts] = useState<Record<number, number>>({});
+  const [attemptProgress, setAttemptProgress] = useState(0);
+  const [justCompletedId, setJustCompletedId] = useState<number | null>(null);
+  const checkedSeqRef = useRef(0);
+  const keepListeningRef = useRef(false);
+
   const selectedCategory = AFFIRMATION_CATEGORIES.find((c) => c.id === selectedCategoryId)!;
   const affirmations = selectedCategory.affirmations;
   const categoryAffirmedCount = affirmations.filter((a) => affirmedIds.has(a.id)).length;
 
+  const stopSpeaking = useCallback(() => {
+    keepListeningRef.current = false;
+    speech.stop();
+    setSpeakingId(null);
+    setAttemptProgress(0);
+    checkedSeqRef.current = speech.resultSeq;
+  }, [speech]);
+
+  const startSpeaking = useCallback(async (affirmation: Affirmation) => {
+    checkedSeqRef.current = speech.resultSeq;
+    setAttemptProgress(0);
+    setSpeakingId(affirmation.id);
+    keepListeningRef.current = true;
+    await speech.start({ continuous: true, interimResults: true });
+  }, [speech]);
+
+  const handleToggleSpeaking = useCallback((affirmation: Affirmation) => {
+    if (speakingId === affirmation.id) {
+      stopSpeaking();
+    } else {
+      if (speakingId != null) stopSpeaking();
+      startSpeaking(affirmation);
+    }
+  }, [speakingId, startSpeaking, stopSpeaking]);
+
   const handleCategoryPress = useCallback((id: string) => {
+    stopSpeaking();
     setSelectedCategoryId(id);
     setActiveIndex(0);
     flatListRef.current?.scrollToIndex({ index: 0, animated: false });
-  }, []);
+  }, [stopSpeaking]);
 
   const goToIndex = useCallback((index: number) => {
     const clamped = Math.max(0, Math.min(index, affirmations.length - 1));
@@ -48,17 +88,72 @@ export default function AffirmationsScreen() {
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
+  // -- live transcript → match against the affirmation currently being spoken --
+  useEffect(() => {
+    if (speakingId == null) return;
+    const affirmation = ALL_AFFIRMATIONS.find((a) => a.id === speakingId);
+    if (!affirmation) return;
+
+    const liveText = speech.transcript || speech.interimTranscript;
+    if (liveText) {
+      setAttemptProgress(speechMatchRatio(liveText, affirmation.text));
+    }
+
+    if (speech.transcript && speech.resultSeq !== checkedSeqRef.current) {
+      checkedSeqRef.current = speech.resultSeq;
+      const ratio = speechMatchRatio(speech.transcript, affirmation.text);
+
+      if (ratio >= MATCH_THRESHOLD) {
+        const nextCount = (repCounts[affirmation.id] ?? 0) + 1;
+        setRepCounts((prev) => ({ ...prev, [affirmation.id]: nextCount }));
+        setAttemptProgress(0);
+        setJustCompletedId(affirmation.id);
+        setTimeout(() => {
+          setJustCompletedId((current) => (current === affirmation.id ? null : current));
+        }, 700);
+
+        if (nextCount >= REQUIRED_REPETITIONS) {
+          keepListeningRef.current = false;
+          speech.stop();
+          setSpeakingId(null);
+          setAffirmedIds((prev) => {
+            const next = new Set(prev);
+            next.add(affirmation.id);
+            return next;
+          });
+        }
+      }
+    }
+  }, [speech.transcript, speech.interimTranscript, speech.resultSeq, speakingId, repCounts, speech]);
+
+  // -- continuous mode can end between phrases on some platforms; pick back up --
+  useEffect(() => {
+    if (!speech.isListening && speakingId != null && keepListeningRef.current) {
+      const timer = setTimeout(() => {
+        if (keepListeningRef.current) {
+          speech.start({ continuous: true, interimResults: true });
+        }
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [speech.isListening, speakingId, speech]);
+
+  // -- surface permission/recognition errors by ending the session --
+  useEffect(() => {
+    if (speech.error && speakingId != null) {
+      stopSpeaking();
+    }
+  }, [speech.error, speakingId, stopSpeaking]);
+
   const renderAffirmationPage = ({ item }: { item: Affirmation }) => (
     <AffirmationPage
       affirmation={item}
       isAffirmed={affirmedIds.has(item.id)}
-      onAffirm={() => {
-        setAffirmedIds((prev) => {
-          const next = new Set(prev);
-          next.add(item.id);
-          return next;
-        });
-      }}
+      repCount={repCounts[item.id] ?? 0}
+      isListening={speech.isListening && speakingId === item.id}
+      progress={speakingId === item.id ? attemptProgress : 0}
+      justCompleted={justCompletedId === item.id}
+      onToggleSpeaking={() => handleToggleSpeaking(item)}
     />
   );
 
@@ -113,6 +208,7 @@ export default function AffirmationsScreen() {
             decelerationRate="fast"
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
+            onScrollBeginDrag={stopSpeaking}
             getItemLayout={(_data, index) => ({
               length: SCREEN_WIDTH,
               offset: SCREEN_WIDTH * index,
@@ -124,7 +220,7 @@ export default function AffirmationsScreen() {
         {/* navigation arrows + page indicator */}
         <View style={styles.navRow}>
           <Pressable
-            onPress={() => goToIndex(activeIndex - 1)}
+            onPress={() => { stopSpeaking(); goToIndex(activeIndex - 1); }}
             style={[styles.navArrow, activeIndex === 0 && styles.navArrowDisabled]}
             hitSlop={12}
             disabled={activeIndex === 0}
@@ -151,7 +247,7 @@ export default function AffirmationsScreen() {
           </View>
 
           <Pressable
-            onPress={() => goToIndex(activeIndex + 1)}
+            onPress={() => { stopSpeaking(); goToIndex(activeIndex + 1); }}
             style={[styles.navArrow, activeIndex >= affirmations.length - 1 && styles.navArrowDisabled]}
             hitSlop={12}
             disabled={activeIndex >= affirmations.length - 1}
@@ -169,111 +265,37 @@ export default function AffirmationsScreen() {
 }
 
 // ---------------------------------------------------------------------------
-// AffirmationPage — with visible affirm button + clear affirmed state
+// AffirmationPage — speak the affirmation aloud 3 times to complete it
 // ---------------------------------------------------------------------------
 
 interface AffirmationPageProps {
   affirmation: Affirmation;
   isAffirmed: boolean;
-  onAffirm: () => void;
+  repCount: number;
+  isListening: boolean;
+  progress: number;
+  justCompleted: boolean;
+  onToggleSpeaking: () => void;
 }
 
-function AffirmationPage({ affirmation, isAffirmed, onAffirm }: AffirmationPageProps) {
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const checkAnim = useRef(new Animated.Value(0)).current;
-  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const progressRef = useRef<Animated.CompositeAnimation | null>(null);
-
-  // Progress bar width for hold feedback
-  const progressWidth = progressAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: ['0%', '100%'],
-  });
-
-  // Checkmark animation
-  const checkOpacity = checkAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-  const checkScale = checkAnim.interpolate({
-    inputRange: [0, 0.5, 1],
-    outputRange: [0.5, 1.2, 1],
-  });
-
-  const handlePressIn = () => {
-    if (isAffirmed) return;
-
-    // Scale card down slightly
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      damping: 15,
-      stiffness: 150,
-      mass: 1,
-      useNativeDriver: true,
-    }).start();
-
-    // Fill progress bar
-    progressRef.current = Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: HOLD_DURATION,
-      useNativeDriver: false,
-    });
-    progressRef.current.start();
-
-    // Trigger affirm after hold
-    holdTimer.current = setTimeout(() => {
-      onAffirm();
-
-      // Show checkmark with bounce
-      Animated.spring(checkAnim, {
-        toValue: 1,
-        damping: 12,
-        stiffness: 200,
-        mass: 0.8,
-        useNativeDriver: true,
-      }).start();
-
-      // Release scale
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        damping: 15,
-        stiffness: 150,
-        mass: 1,
-        useNativeDriver: true,
-      }).start();
-    }, HOLD_DURATION);
-  };
-
-  const handlePressOut = () => {
-    if (holdTimer.current) {
-      clearTimeout(holdTimer.current);
-      holdTimer.current = null;
-    }
-    if (progressRef.current) {
-      progressRef.current.stop();
-    }
-    // Reset if not affirmed
-    if (!isAffirmed) {
-      Animated.timing(progressAnim, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: false,
-      }).start();
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        damping: 15,
-        stiffness: 150,
-        mass: 1,
-        useNativeDriver: true,
-      }).start();
-    }
-  };
+function AffirmationPage({
+  affirmation,
+  isAffirmed,
+  repCount,
+  isListening,
+  progress,
+  justCompleted,
+  onToggleSpeaking,
+}: AffirmationPageProps) {
+  const hint = isListening
+    ? 'say it out loud…'
+    : repCount > 0
+      ? `${repCount} of ${REQUIRED_REPETITIONS} — tap to continue`
+      : 'tap, then speak the affirmation aloud';
 
   return (
     <View style={styles.page}>
       <View style={styles.pageContent}>
-        {/* Affirmation text */}
         <Text
           style={[
             styles.affirmationText,
@@ -283,53 +305,42 @@ function AffirmationPage({ affirmation, isAffirmed, onAffirm }: AffirmationPageP
           {affirmation.text}
         </Text>
 
-        {/* Affirmed checkmark overlay */}
-        {isAffirmed && (
-          <Animated.View
-            style={[
-              styles.checkmarkWrap,
-              {
-                opacity: checkOpacity,
-                transform: [{ scale: checkScale }],
-              },
-            ]}
-          >
+        {isAffirmed ? (
+          <View style={styles.checkmarkWrap}>
             <View style={styles.checkmarkCircle}>
               <Ionicons name="checkmark" size={28} color={COLORS.bg} />
             </View>
             <Text style={styles.affirmedLabel}>affirmed</Text>
-          </Animated.View>
-        )}
-
-        {/* Affirm button — only when NOT affirmed */}
-        {!isAffirmed && (
-          <Pressable
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={styles.affirmButtonWrap}
-            accessibilityRole="button"
-            accessibilityLabel={`Hold to affirm: ${affirmation.text}`}
-            accessibilityHint="Long press to affirm"
-          >
-            <Animated.View
-              style={[
-                styles.affirmButton,
-                { transform: [{ scale: scaleAnim }] },
-              ]}
+          </View>
+        ) : (
+          <View style={styles.voiceWrap}>
+            <Pressable
+              onPress={onToggleSpeaking}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={
+                isListening ? 'Stop speaking' : `Speak to affirm: ${affirmation.text}`
+              }
+              accessibilityHint="Say the affirmation aloud three times to complete it"
             >
-              {/* Progress fill bar */}
-              <Animated.View
-                style={[
-                  styles.progressFill,
-                  { width: progressWidth },
-                ]}
-              />
-              <View style={styles.affirmButtonContent}>
-                <Ionicons name="heart-outline" size={18} color={COLORS.accent} />
-                <Text style={styles.affirmButtonText}>hold to affirm</Text>
-              </View>
-            </Animated.View>
-          </Pressable>
+              <VoiceProgressRing progress={progress} active={isListening} completed={justCompleted} />
+            </Pressable>
+
+            <View style={{ height: S.md }} />
+
+            <Text style={styles.voiceHint}>{hint}</Text>
+
+            <View style={{ height: S.sm }} />
+
+            <View style={styles.repRow} accessibilityLabel={`${repCount} of ${REQUIRED_REPETITIONS} repetitions completed`}>
+              {Array.from({ length: REQUIRED_REPETITIONS }).map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.repDot, i < repCount ? styles.repDotFilled : styles.repDotEmpty]}
+                />
+              ))}
+            </View>
+          </View>
         )}
       </View>
     </View>
@@ -412,43 +423,35 @@ const styles = StyleSheet.create({
     color: COLORS.accent,
   },
 
-  // -- affirm button --
-  affirmButtonWrap: {
+  // -- speak-to-affirm --
+  voiceWrap: {
     marginTop: S.xl,
-    width: '100%',
-    maxWidth: 240,
+    alignItems: 'center',
   },
-  affirmButton: {
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.pill,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.accentBorder,
-    overflow: 'hidden',
-    minHeight: 52,
-    justifyContent: 'center',
+  voiceHint: {
+    fontFamily: TYPE.secondary.fontFamily,
+    fontSize: 13,
+    color: COLORS.fgSecondary,
+    letterSpacing: 0.3,
   },
-  progressFill: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    backgroundColor: COLORS.accentSoft,
-    borderRadius: RADIUS.pill,
-  },
-  affirmButtonContent: {
+  repRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: S.sm,
-    paddingVertical: 14,
-    paddingHorizontal: S.lg,
   },
-  affirmButtonText: {
-    fontFamily: TYPE.body.fontFamily,
-    fontSize: 15,
-    fontWeight: '500',
-    color: COLORS.accent,
-    letterSpacing: 0.5,
+  repDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.accentBorder,
+  },
+  repDotEmpty: {
+    backgroundColor: 'transparent',
+  },
+  repDotFilled: {
+    backgroundColor: COLORS.accent,
+    borderColor: COLORS.accent,
   },
 
   // -- affirmed state --
