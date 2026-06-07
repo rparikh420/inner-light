@@ -40,3 +40,4 @@ yarn-error.*
 /ios
 /android
 .codegraph/
+e2e/results/
