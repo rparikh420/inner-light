@@ -31,8 +31,14 @@ export default function AffirmationsScreen() {
   const handleCategoryPress = useCallback((id: string) => {
     setSelectedCategoryId(id);
     setActiveIndex(0);
-    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    flatListRef.current?.scrollToIndex({ index: 0, animated: false });
   }, []);
+
+  const goToIndex = useCallback((index: number) => {
+    const clamped = Math.max(0, Math.min(index, affirmations.length - 1));
+    setActiveIndex(clamped);
+    flatListRef.current?.scrollToIndex({ index: clamped, animated: true });
+  }, [affirmations.length]);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
@@ -104,24 +110,21 @@ export default function AffirmationsScreen() {
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
-            snapToInterval={SCREEN_WIDTH}
             decelerationRate="fast"
             onViewableItemsChanged={onViewableItemsChanged}
             viewabilityConfig={viewabilityConfig}
+            getItemLayout={(_data, index) => ({
+              length: SCREEN_WIDTH,
+              offset: SCREEN_WIDTH * index,
+              index,
+            })}
           />
         </View>
 
         {/* navigation arrows + page indicator */}
         <View style={styles.navRow}>
           <Pressable
-            onPress={() => {
-              if (activeIndex > 0) {
-                flatListRef.current?.scrollToOffset({
-                  offset: (activeIndex - 1) * SCREEN_WIDTH,
-                  animated: true,
-                });
-              }
-            }}
+            onPress={() => goToIndex(activeIndex - 1)}
             style={[styles.navArrow, activeIndex === 0 && styles.navArrowDisabled]}
             hitSlop={12}
             disabled={activeIndex === 0}
@@ -148,14 +151,7 @@ export default function AffirmationsScreen() {
           </View>
 
           <Pressable
-            onPress={() => {
-              if (activeIndex < affirmations.length - 1) {
-                flatListRef.current?.scrollToOffset({
-                  offset: (activeIndex + 1) * SCREEN_WIDTH,
-                  animated: true,
-                });
-              }
-            }}
+            onPress={() => goToIndex(activeIndex + 1)}
             style={[styles.navArrow, activeIndex >= affirmations.length - 1 && styles.navArrowDisabled]}
             hitSlop={12}
             disabled={activeIndex >= affirmations.length - 1}
