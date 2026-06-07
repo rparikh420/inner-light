@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,12 @@ import {
   StyleSheet,
   Alert,
 } from 'react-native';
-import { COLORS, TYPE, S, SCREEN_PADDING, SURFACE, BUTTON } from '../../src/constants/theme';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { COLORS, TYPE, S, SCREEN_PADDING, SURFACE, BUTTON, RADIUS } from '../../src/constants/theme';
 import { JOURNAL_PROMPTS, JournalPrompt } from '../../src/data/journal-prompts';
 import GradientBackground from '../../src/components/GradientBackground';
 import { useIdentity, JournalEntry } from '../../src/hooks/useIdentity';
+import { useSpeechToText } from '../../src/hooks/useSpeechToText';
 import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
 
 export default function JournalScreen() {
@@ -24,6 +26,42 @@ export default function JournalScreen() {
   const [pastEntries, setPastEntries] = useState<JournalEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [entryCounter, setEntryCounter] = useState(0);
+
+  // -- voice journaling: dictate the entry instead of typing it --
+  const speech = useSpeechToText();
+  const dictationBaseRef = useRef('');
+  const lastCommittedSeqRef = useRef(0);
+
+  const handleToggleDictation = useCallback(async () => {
+    if (speech.isListening) {
+      speech.stop();
+      return;
+    }
+    dictationBaseRef.current = entryText;
+    lastCommittedSeqRef.current = speech.resultSeq;
+    await speech.start({ continuous: true, interimResults: true });
+  }, [speech, entryText]);
+
+  // Live-merge the dictated speech into the entry as it's heard.
+  // Final results are committed into the running base exactly once — keyed off
+  // resultSeq rather than the transcript text, since repeating the same phrase
+  // produces an identical string that React would otherwise dedupe away.
+  // Interim results are shown as a live preview on top of that base.
+  useEffect(() => {
+    if (speech.transcript && speech.resultSeq !== lastCommittedSeqRef.current) {
+      lastCommittedSeqRef.current = speech.resultSeq;
+      const base = dictationBaseRef.current;
+      const merged = base ? `${base} ${speech.transcript}` : speech.transcript;
+      dictationBaseRef.current = merged;
+      setEntryText(merged);
+      return;
+    }
+
+    if (speech.interimTranscript) {
+      const base = dictationBaseRef.current;
+      setEntryText(base ? `${base} ${speech.interimTranscript}` : speech.interimTranscript);
+    }
+  }, [speech.transcript, speech.interimTranscript, speech.resultSeq]);
 
   useEffect(() => {
     let mounted = true;
@@ -128,6 +166,34 @@ export default function JournalScreen() {
           onChangeText={setEntryText}
         />
 
+        {/* 12px gap */}
+        <View style={{ height: S.sm }} />
+
+        {/* voice journaling */}
+        <Pressable
+          onPress={handleToggleDictation}
+          style={[styles.dictateButton, speech.isListening && styles.dictateButtonActive]}
+          accessibilityRole="button"
+          accessibilityLabel={speech.isListening ? 'Stop voice journaling' : 'Speak your journal entry'}
+        >
+          {speech.isListening && <View style={styles.recordingDot} />}
+          <Ionicons
+            name={speech.isListening ? 'mic' : 'mic-outline'}
+            size={16}
+            color={speech.isListening ? COLORS.accent : COLORS.fgSecondary}
+          />
+          <Text style={[styles.dictateButtonText, speech.isListening && styles.dictateButtonTextActive]}>
+            {speech.isListening ? 'listening… tap to stop' : 'speak your entry'}
+          </Text>
+        </Pressable>
+
+        {speech.error ? (
+          <>
+            <View style={{ height: S.xs }} />
+            <Text style={styles.dictateError}>{speech.error}</Text>
+          </>
+        ) : null}
+
         {/* 24px gap */}
         <View style={{ height: S.lg }} />
 
@@ -212,6 +278,43 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     minHeight: 160,
     padding: S.md,
+  },
+
+  dictateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: S.sm,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    paddingVertical: 10,
+    paddingHorizontal: S.md,
+    minHeight: 40,
+  },
+  dictateButtonActive: {
+    backgroundColor: COLORS.accentSoft,
+    borderColor: COLORS.accentBorder,
+  },
+  recordingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: COLORS.danger,
+  },
+  dictateButtonText: {
+    ...TYPE.secondary,
+    fontSize: 13,
+  },
+  dictateButtonTextActive: {
+    color: COLORS.accent,
+  },
+  dictateError: {
+    ...TYPE.secondary,
+    fontSize: 12,
+    color: COLORS.danger,
   },
 
   rule: {

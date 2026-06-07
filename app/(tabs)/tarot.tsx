@@ -23,6 +23,7 @@ import {
 } from '../../src/constants/theme';
 import { TAROT_CARDS, TarotCard } from '../../src/data/tarot';
 import { getCardImage } from '../../src/data/tarot-images';
+import { getCardAstrology } from '../../src/utils/astrology';
 import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
 
 // ---------------------------------------------------------------------------
@@ -161,6 +162,7 @@ export default function TarotScreen() {
 
   // ---- derived ----
   const cardImageSource = getCardImage(card.id);
+  const astro = getCardAstrology(card);
 
   const yesNoAnswer = isReversed
     ? card.yesNoMaybe === 'yes'
@@ -260,17 +262,10 @@ export default function TarotScreen() {
             ]}
           >
             <View style={styles.revealedContent}>
-              {/* Hero card image */}
-              <View style={styles.imageWrap}>
-                <Image
-                  source={cardImageSource}
-                  style={[
-                    styles.cardImage,
-                    isReversed && { transform: [{ rotate: '180deg' }] },
-                  ]}
-                  resizeMode="contain"
-                />
-              </View>
+              {/* Eyebrow — number · arcana */}
+              <Text style={styles.eyebrow}>
+                {astro.numeral} · {card.arcana} arcana
+              </Text>
 
               {/* Card name */}
               <Text style={styles.cardName}>
@@ -280,8 +275,57 @@ export default function TarotScreen() {
                 )}
               </Text>
 
-              {/* Astrology */}
-              <Text style={styles.astrology}>{card.astrology}</Text>
+              {/* Sign + element placement */}
+              <Text style={styles.signSubtitle}>
+                {astro.sign.name} · {astro.sign.element}
+              </Text>
+
+              {/* Astrology badges flanking the card image */}
+              <View style={styles.astroSection}>
+                <View style={styles.badgeColumn}>
+                  <AstroBadge label="planet" value={astro.planetName} />
+                  <AstroBadge label="polarity" value={astro.sign.polarity} />
+                </View>
+
+                <View style={styles.heroImageWrap}>
+                  <Image
+                    source={cardImageSource}
+                    style={[
+                      styles.heroImage,
+                      isReversed && { transform: [{ rotate: '180deg' }] },
+                    ]}
+                    resizeMode="contain"
+                  />
+                </View>
+
+                <View style={styles.badgeColumn}>
+                  <AstroBadge label="number" value={String(card.number)} />
+                </View>
+              </View>
+
+              {/* Keywords */}
+              <Text style={styles.keywords}>
+                {card.keywords.join(' · ').toUpperCase()}
+              </Text>
+
+              {/* Divider */}
+              <View style={styles.dividerRow}>
+                <View style={styles.dividerLine} />
+                <Ionicons name="sparkles" size={12} color={COLORS.accent} />
+                <View style={styles.dividerLine} />
+              </View>
+
+              {/* Astrological aspects to this placement */}
+              <View style={styles.aspectGrid}>
+                {astro.aspects.map((aspect) => (
+                  <View key={aspect.label} style={styles.aspectCell}>
+                    <Text style={styles.aspectLabel}>{aspect.label.toUpperCase()}</Text>
+                    <Text style={styles.aspectValue}>
+                      {aspect.signs.map((sign) => sign.name).join(' · ')}
+                    </Text>
+                  </View>
+                ))}
+              </View>
 
               {/* Yes/No answer */}
               {readingMode === 'yesno' && (
@@ -293,11 +337,6 @@ export default function TarotScreen() {
               {/* Guidance content */}
               {readingMode === 'guidance' && (
                 <>
-                  {/* Keywords */}
-                  <Text style={styles.keywords}>
-                    {card.keywords.join(' · ')}
-                  </Text>
-
                   {/* Meaning */}
                   <View style={styles.sectionBlock}>
                     <Text style={styles.sectionLabel}>meaning</Text>
@@ -314,14 +353,9 @@ export default function TarotScreen() {
                     </View>
                   )}
 
-                  {/* Guidance */}
-                  <View style={styles.sectionBlock}>
-                    <Text style={styles.sectionLabel}>guidance</Text>
-                    <Text style={styles.guidanceText}>
-                      {isReversed
-                        ? `in reverse: ${card.reversed.split('.')[0]}. reflect on what may be blocked or out of balance.`
-                        : card.guidance}
-                    </Text>
+                  {/* Guidance, as a daily mantra */}
+                  <View style={styles.quoteBox}>
+                    <Text style={styles.quoteText}>&ldquo;{card.guidance}&rdquo;</Text>
                   </View>
                 </>
               )}
@@ -337,6 +371,19 @@ export default function TarotScreen() {
         </View>
       </ScrollView>
     </GradientBackground>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Astrology badge — small label/value chip used in the placement layout
+// ---------------------------------------------------------------------------
+
+function AstroBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.badge}>
+      <Text style={styles.badgeLabel}>{label}</Text>
+      <Text style={styles.badgeValue}>{value}</Text>
+    </View>
   );
 }
 
@@ -440,17 +487,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
 
-  // ---- Hero image ----
-  imageWrap: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  cardImage: {
-    width: CARD_IMAGE_WIDTH,
-    height: CARD_IMAGE_HEIGHT,
-    borderRadius: RADIUS.md,
-    borderWidth: 2,
-    borderColor: COLORS.accentBorder,
+  // ---- Eyebrow (number · arcana) ----
+  eyebrow: {
+    ...TYPE.secondary,
+    fontSize: 11,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    marginBottom: S.sm,
   },
 
   // ---- Card name ----
@@ -459,7 +503,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: '600',
     textAlign: 'center',
-    marginBottom: S.sm,
+    marginBottom: S.xs,
   },
   reversedSuffix: {
     ...TYPE.secondary,
@@ -467,13 +511,66 @@ const styles = StyleSheet.create({
     fontFamily: TYPE.accent.fontFamily,
   },
 
-  // ---- Astrology ----
-  astrology: {
-    ...TYPE.secondary,
-    fontSize: 13,
+  // ---- Sign / planet subtitle ----
+  signSubtitle: {
+    ...TYPE.accent,
+    fontSize: 15,
     fontStyle: 'italic',
+    color: COLORS.fgSecondary,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: S.lg,
+  },
+
+  // ---- Astrology badge layout (flanking the card image) ----
+  astroSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginBottom: S.lg,
+  },
+  badgeColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  badge: {
+    width: '100%',
+    maxWidth: 108,
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.accentBorder,
+    paddingVertical: S.sm,
+    paddingHorizontal: S.sm,
+    alignItems: 'center',
+    marginBottom: S.sm,
+  },
+  badgeLabel: {
+    ...TYPE.secondary,
+    fontSize: 9,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  badgeValue: {
+    ...TYPE.accent,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginTop: 2,
+  },
+
+  // ---- Hero image (between the badge columns) ----
+  heroImageWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: S.sm,
+  },
+  heroImage: {
+    width: CARD_IMAGE_WIDTH * 0.5,
+    height: CARD_IMAGE_HEIGHT * 0.5,
+    borderRadius: RADIUS.md,
+    borderWidth: 2,
+    borderColor: COLORS.accentBorder,
   },
 
   // ---- Yes/No answer ----
@@ -488,9 +585,71 @@ const styles = StyleSheet.create({
   // ---- Keywords ----
   keywords: {
     ...TYPE.secondary,
-    fontSize: 13,
+    fontSize: 12,
+    letterSpacing: 1.5,
     textAlign: 'center',
-    marginBottom: 32,
+    marginBottom: S.lg,
+  },
+
+  // ---- Divider ----
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: S.lg,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: COLORS.border,
+    marginHorizontal: S.sm,
+  },
+
+  // ---- Aspect grid ----
+  aspectGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: S.lg,
+  },
+  aspectCell: {
+    width: '48%',
+    backgroundColor: COLORS.purpleSoft,
+    borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.purpleBorder,
+    paddingVertical: S.sm,
+    paddingHorizontal: S.md,
+    marginBottom: S.sm,
+  },
+  aspectLabel: {
+    ...TYPE.secondary,
+    fontSize: 9,
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+  },
+  aspectValue: {
+    ...TYPE.accent,
+    fontSize: 14,
+  },
+
+  // ---- Quote box (daily guidance as mantra) ----
+  quoteBox: {
+    width: '100%',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.accent,
+    padding: S.md,
+    marginBottom: S.lg,
+  },
+  quoteText: {
+    ...TYPE.body,
+    fontSize: 15,
+    lineHeight: 24,
+    fontStyle: 'italic',
   },
 
   // ---- Sections ----
@@ -513,12 +672,6 @@ const styles = StyleSheet.create({
     borderLeftWidth: 2,
     borderLeftColor: COLORS.accent,
     paddingLeft: S.md,
-  },
-  guidanceText: {
-    ...TYPE.body,
-    fontSize: 15,
-    lineHeight: 24,
-    fontStyle: 'italic',
   },
 
   // ---- Draw again ----
