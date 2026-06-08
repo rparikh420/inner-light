@@ -23,6 +23,7 @@ import {
 } from '../../src/constants/theme';
 import { TAROT_CARDS, TarotCard } from '../../src/data/tarot';
 import { getCardImage } from '../../src/data/tarot-images';
+import { CARD_ANNOTATIONS } from '../../src/data/tarot-annotations';
 import { getCardAstrology } from '../../src/utils/astrology';
 import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
 
@@ -38,6 +39,10 @@ const CARD_HEIGHT = Math.round(CARD_WIDTH * 1.68);
 
 const CARD_IMAGE_WIDTH = 260;
 const CARD_IMAGE_HEIGHT = Math.round(CARD_IMAGE_WIDTH * 1.68);
+
+const ANNOTATED_IMAGE_WIDTH = CARD_IMAGE_WIDTH * 0.62;
+const ANNOTATED_IMAGE_HEIGHT = Math.round(ANNOTATED_IMAGE_WIDTH * 1.68);
+const ANNOTATION_MARGIN = 92;
 
 interface DailyPullRecord {
   date: string;
@@ -58,6 +63,7 @@ export default function TarotScreen() {
   const [isReversed, setIsReversed] = useState(false);
   const [hasDrawnToday, setHasDrawnToday] = useState(false);
   const [readingMode, setReadingMode] = useState<ReadingMode>('guidance');
+  const [showAnnotations, setShowAnnotations] = useState(false);
 
   // ---- animation ----
   const flipAnim = useRef(new Animated.Value(0)).current;
@@ -220,6 +226,26 @@ export default function TarotScreen() {
               yes / no
             </Text>
           </Pressable>
+          <View style={{ width: S.sm }} />
+          <Pressable
+            onPress={() => setShowAnnotations((prev) => !prev)}
+            style={[
+              styles.modePill,
+              showAnnotations && styles.modePillActive,
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: showAnnotations }}
+            accessibilityLabel="Toggle card annotations"
+          >
+            <Text
+              style={[
+                styles.modePillText,
+                showAnnotations && styles.modePillTextActive,
+              ]}
+            >
+              annotate
+            </Text>
+          </Pressable>
         </View>
 
         {/* ---- Card Area ---- */}
@@ -275,33 +301,59 @@ export default function TarotScreen() {
                 )}
               </Text>
 
-              {/* Sign + element placement */}
-              <Text style={styles.signSubtitle}>
-                {astro.sign.name} · {astro.sign.element}
-              </Text>
+              {showAnnotations ? (
+                <>
+                  {/* Smaller placement chips, stacked above the card */}
+                  <View style={styles.miniBadgeRow}>
+                    <MiniBadge label="planet" value={astro.planetName} />
+                    <MiniBadge label="element" value={astro.sign.element} />
+                    <MiniBadge label="number" value={String(card.number)} />
+                    <MiniBadge label="zodiac" value={astro.sign.name} />
+                  </View>
 
-              {/* Astrology badges flanking the card image */}
-              <View style={styles.astroSection}>
-                <View style={styles.badgeColumn}>
-                  <AstroBadge label="planet" value={astro.planetName} />
-                  <AstroBadge label="polarity" value={astro.sign.polarity} />
-                </View>
+                  {/* Card illustration with symbol callouts */}
+                  <View style={styles.annotatedWrap}>
+                    <View style={styles.annotatedImageWrap}>
+                      <Image
+                        source={cardImageSource}
+                        style={[
+                          styles.annotatedImage,
+                          isReversed && { transform: [{ rotate: '180deg' }] },
+                        ]}
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <CardAnnotations
+                      annotations={CARD_ANNOTATIONS[card.id] ?? []}
+                      isReversed={isReversed}
+                    />
+                  </View>
+                </>
+              ) : (
+                /* Astrology badges flanking the card image */
+                <View style={styles.astroSection}>
+                  <View style={styles.badgeColumn}>
+                    <AstroBadge label="planet" value={astro.planetName} />
+                    <AstroBadge label="element" value={astro.sign.element} />
+                  </View>
 
-                <View style={styles.heroImageWrap}>
-                  <Image
-                    source={cardImageSource}
-                    style={[
-                      styles.heroImage,
-                      isReversed && { transform: [{ rotate: '180deg' }] },
-                    ]}
-                    resizeMode="contain"
-                  />
-                </View>
+                  <View style={styles.heroImageWrap}>
+                    <Image
+                      source={cardImageSource}
+                      style={[
+                        styles.heroImage,
+                        isReversed && { transform: [{ rotate: '180deg' }] },
+                      ]}
+                      resizeMode="contain"
+                    />
+                  </View>
 
-                <View style={styles.badgeColumn}>
-                  <AstroBadge label="number" value={String(card.number)} />
+                  <View style={styles.badgeColumn}>
+                    <AstroBadge label="number" value={String(card.number)} />
+                    <AstroBadge label="zodiac" value={astro.sign.name} />
+                  </View>
                 </View>
-              </View>
+              )}
 
               {/* Keywords */}
               <Text style={styles.keywords}>
@@ -337,19 +389,18 @@ export default function TarotScreen() {
               {/* Guidance content */}
               {readingMode === 'guidance' && (
                 <>
-                  {/* Meaning */}
-                  <View style={styles.sectionBlock}>
-                    <Text style={styles.sectionLabel}>meaning</Text>
-                    <Text style={styles.bodyText}>{card.meaning}</Text>
-                  </View>
-
-                  {/* Reversed meaning */}
-                  {isReversed && (
+                  {/* Meaning — labeled by the card's current orientation */}
+                  {isReversed ? (
                     <View style={styles.sectionBlock}>
-                      <Text style={styles.sectionLabel}>reversed</Text>
+                      <Text style={styles.sectionLabel}>reversed meaning</Text>
                       <View style={styles.reversedBlock}>
                         <Text style={styles.bodyText}>{card.reversed}</Text>
                       </View>
+                    </View>
+                  ) : (
+                    <View style={styles.sectionBlock}>
+                      <Text style={styles.sectionLabel}>upright meaning</Text>
+                      <Text style={styles.bodyText}>{card.meaning}</Text>
                     </View>
                   )}
 
@@ -384,6 +435,78 @@ function AstroBadge({ label, value }: { label: string; value: string }) {
       <Text style={styles.badgeLabel}>{label}</Text>
       <Text style={styles.badgeValue}>{value}</Text>
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mini badge — compact placement chip for the annotated layout
+// ---------------------------------------------------------------------------
+
+function MiniBadge({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.miniBadge}>
+      <Text style={styles.miniBadgeLabel}>{label}</Text>
+      <Text style={styles.miniBadgeValue}>{value}</Text>
+    </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Card annotations — leader lines from symbols in the illustration out to
+// short captions in the margins either side of the image
+// ---------------------------------------------------------------------------
+
+function CardAnnotations({
+  annotations,
+  isReversed,
+}: {
+  annotations: import('../../src/data/tarot-annotations').CardAnnotation[];
+  isReversed: boolean;
+}) {
+  return (
+    <>
+      {annotations.map((annotation, index) => {
+        // When the card is displayed reversed, the image is rotated 180° —
+        // mirror the callout position so the line still meets its symbol.
+        const x = isReversed ? 100 - annotation.x : annotation.x;
+        const y = isReversed ? 100 - annotation.y : annotation.y;
+
+        const dotLeft = ANNOTATION_MARGIN + (x / 100) * ANNOTATED_IMAGE_WIDTH;
+        const dotTop = (y / 100) * ANNOTATED_IMAGE_HEIGHT;
+        const pointsLeft = x < 50;
+        const lineLeft = pointsLeft ? ANNOTATION_MARGIN : dotLeft;
+        const lineWidth = pointsLeft
+          ? dotLeft - ANNOTATION_MARGIN
+          : ANNOTATION_MARGIN + ANNOTATED_IMAGE_WIDTH - dotLeft;
+
+        return (
+          <React.Fragment key={index}>
+            <View style={[styles.annotationDot, { left: dotLeft - 3, top: dotTop - 3 }]} />
+            <View style={[styles.annotationLine, { left: lineLeft, top: dotTop, width: lineWidth }]} />
+            <View
+              style={[
+                styles.annotationCaption,
+                pointsLeft
+                  ? { left: 0, width: ANNOTATION_MARGIN - 10, alignItems: 'flex-end', top: dotTop - 14 }
+                  : {
+                      left: ANNOTATION_MARGIN + ANNOTATED_IMAGE_WIDTH + 10,
+                      width: ANNOTATION_MARGIN - 10,
+                      alignItems: 'flex-start',
+                      top: dotTop - 14,
+                    },
+              ]}
+            >
+              <Text style={[styles.annotationLabel, { textAlign: pointsLeft ? 'right' : 'left' }]}>
+                {annotation.label}
+              </Text>
+              <Text style={[styles.annotationMeaning, { textAlign: pointsLeft ? 'right' : 'left' }]}>
+                {annotation.meaning}
+              </Text>
+            </View>
+          </React.Fragment>
+        );
+      })}
+    </>
   );
 }
 
@@ -511,16 +634,6 @@ const styles = StyleSheet.create({
     fontFamily: TYPE.accent.fontFamily,
   },
 
-  // ---- Sign / planet subtitle ----
-  signSubtitle: {
-    ...TYPE.accent,
-    fontSize: 15,
-    fontStyle: 'italic',
-    color: COLORS.fgSecondary,
-    textAlign: 'center',
-    marginBottom: S.lg,
-  },
-
   // ---- Astrology badge layout (flanking the card image) ----
   astroSection: {
     flexDirection: 'row',
@@ -573,13 +686,86 @@ const styles = StyleSheet.create({
     borderColor: COLORS.accentBorder,
   },
 
-  // ---- Yes/No answer ----
-  yesNoAnswer: {
-    ...TYPE.heading,
-    fontSize: 36,
+  // ---- Mini placement chips (annotated layout) ----
+  miniBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: S.sm,
+    marginBottom: S.lg,
+  },
+  miniBadge: {
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.accentBorder,
+    paddingVertical: 6,
+    paddingHorizontal: S.sm,
+    alignItems: 'center',
+  },
+  miniBadgeLabel: {
+    ...TYPE.secondary,
+    fontSize: 8,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  miniBadgeValue: {
+    ...TYPE.accent,
+    fontSize: 12,
+    fontWeight: '600',
     textAlign: 'center',
-    marginTop: S.md,
-    marginBottom: 32,
+  },
+
+  // ---- Annotated illustration ----
+  annotatedWrap: {
+    width: ANNOTATION_MARGIN * 2 + ANNOTATED_IMAGE_WIDTH,
+    height: ANNOTATED_IMAGE_HEIGHT,
+    marginBottom: S.lg,
+  },
+  annotatedImageWrap: {
+    position: 'absolute',
+    left: ANNOTATION_MARGIN,
+    top: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  annotatedImage: {
+    width: ANNOTATED_IMAGE_WIDTH,
+    height: ANNOTATED_IMAGE_HEIGHT,
+    borderRadius: RADIUS.md,
+    borderWidth: 2,
+    borderColor: COLORS.accentBorder,
+  },
+  annotationDot: {
+    position: 'absolute',
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: COLORS.accent,
+  },
+  annotationLine: {
+    position: 'absolute',
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(201,168,124,0.55)',
+  },
+  annotationCaption: {
+    position: 'absolute',
+  },
+  annotationLabel: {
+    ...TYPE.accent,
+    fontSize: 12,
+    fontStyle: 'italic',
+    color: COLORS.fgSecondary,
+    lineHeight: 16,
+  },
+  annotationMeaning: {
+    ...TYPE.secondary,
+    fontSize: 9,
+    color: COLORS.accent,
+    letterSpacing: 0.4,
+    textTransform: 'lowercase',
+    lineHeight: 12,
+    marginTop: 1,
   },
 
   // ---- Keywords ----
@@ -589,6 +775,15 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textAlign: 'center',
     marginBottom: S.lg,
+  },
+
+  // ---- Yes/No answer ----
+  yesNoAnswer: {
+    ...TYPE.heading,
+    fontSize: 36,
+    textAlign: 'center',
+    marginTop: S.md,
+    marginBottom: 32,
   },
 
   // ---- Divider ----

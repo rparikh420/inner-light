@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -80,17 +80,10 @@ function ActionCard({ icon, title, subtitle, onPress }: ActionCardProps) {
 // ---------------------------------------------------------------------------
 
 export default function HomeScreen() {
-  const { identity, isOnboarded, loading, getStreak } = useIdentity();
-  const [streak, setStreak] = useState(0);
+  const { identity, isOnboarded, loading } = useIdentity();
 
   const dailyCard = getDailyItem(TAROT_CARDS);
   const cardImage = getCardImage(dailyCard.id);
-
-  useEffect(() => {
-    let mounted = true;
-    getStreak().then((v) => { if (mounted) setStreak(v); });
-    return () => { mounted = false; };
-  }, [getStreak]);
 
   // Loading
   if (loading) {
@@ -198,15 +191,6 @@ export default function HomeScreen() {
             subtitle="Reflect & write"
             onPress={() => router.navigate('/(tabs)/journal')}
           />
-        </View>
-
-        {/* ── Streak ── */}
-        <View style={styles.streakSection}>
-          <View style={styles.streakCard}>
-            <Ionicons name="flame" size={20} color={COLORS.accent} />
-            <Text style={styles.streakNumber}>{streak}</Text>
-            <Text style={styles.streakLabel}>day streak</Text>
-          </View>
         </View>
       </ScrollView>
     </GradientBackground>
@@ -353,31 +337,6 @@ const styles = StyleSheet.create({
     marginTop: S.xs,
   },
 
-  // ── Streak ──
-  streakSection: {
-    marginTop: S.xl,
-    alignItems: 'center',
-  },
-  streakCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-    borderRadius: RADIUS.pill,
-    paddingVertical: S.sm,
-    paddingHorizontal: S.lg,
-    gap: S.sm,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: COLORS.border,
-  },
-  streakNumber: {
-    ...TYPE.accent,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  streakLabel: {
-    ...TYPE.secondary,
-    fontSize: 13,
-  },
 
   // ── Welcome (not onboarded) ──
   welcomeWrap: {

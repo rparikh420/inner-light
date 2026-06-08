@@ -38,12 +38,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="tarot"
+        name="journal"
         options={{
-          title: 'Guidance',
+          title: 'Journal',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? 'sparkles' : 'sparkles-outline'}
+              name={focused ? 'book' : 'book-outline'}
               size={22}
               color={color}
             />
@@ -64,12 +64,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="journal"
+        name="tarot"
         options={{
-          title: 'Journal',
+          title: 'Guidance',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? 'book' : 'book-outline'}
+              name={focused ? 'sparkles' : 'sparkles-outline'}
               size={22}
               color={color}
             />

@@ -14,6 +14,8 @@ import { COLORS, TYPE, S, SCREEN_PADDING, RADIUS } from '../../src/constants/the
 import { AFFIRMATION_CATEGORIES, Affirmation } from '../../src/data/affirmations';
 import GradientBackground from '../../src/components/GradientBackground';
 import VoiceProgressRing from '../../src/components/VoiceProgressRing';
+import StreakBadge from '../../src/components/StreakBadge';
+import { useIdentity } from '../../src/hooks/useIdentity';
 import { useSpeechToText } from '../../src/hooks/useSpeechToText';
 import { speechMatchRatio } from '../../src/utils/speechMatch';
 
@@ -24,10 +26,18 @@ const MATCH_THRESHOLD = 0.65;
 const ALL_AFFIRMATIONS = AFFIRMATION_CATEGORIES.flatMap((c) => c.affirmations);
 
 export default function AffirmationsScreen() {
+  const { getStreak, incrementStreak } = useIdentity();
   const [selectedCategoryId, setSelectedCategoryId] = useState(AFFIRMATION_CATEGORIES[0].id);
   const [affirmedIds, setAffirmedIds] = useState<Set<number>>(new Set());
+  const [streak, setStreak] = useState(0);
   const flatListRef = useRef<FlatList>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    getStreak().then((value) => { if (mounted) setStreak(value); });
+    return () => { mounted = false; };
+  }, [getStreak]);
 
   // -- voice affirmation session (one shared recognizer; one active affirmation at a time) --
   const speech = useSpeechToText();
@@ -121,10 +131,11 @@ export default function AffirmationsScreen() {
             next.add(affirmation.id);
             return next;
           });
+          incrementStreak().then(setStreak);
         }
       }
     }
-  }, [speech.transcript, speech.interimTranscript, speech.resultSeq, speakingId, repCounts, speech]);
+  }, [speech.transcript, speech.interimTranscript, speech.resultSeq, speakingId, repCounts, speech, incrementStreak]);
 
   // -- continuous mode can end between phrases on some platforms; pick back up --
   useEffect(() => {
@@ -159,6 +170,7 @@ export default function AffirmationsScreen() {
 
   return (
     <GradientBackground>
+      <StreakBadge count={streak} style={styles.streakBadge} />
       <View style={styles.container}>
         {/* category selector */}
         <ScrollView
@@ -355,6 +367,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingTop: S.lg,
+  },
+  streakBadge: {
+    top: S.lg + S.md,
   },
 
   // -- category selector --

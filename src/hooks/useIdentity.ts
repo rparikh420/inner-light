@@ -15,11 +15,26 @@ export interface UserIdentity {
   createdAt: string;
 }
 
+export interface JournalAttachmentImage {
+  uri: string;
+}
+
+export interface JournalAttachmentFile {
+  uri: string;
+  name: string;
+  mimeType?: string;
+}
+
 export interface JournalEntry {
   id: string;
   date: string;
   promptId: number;
   response: string;
+  /** human-readable place name captured at save time, e.g. "San Francisco, CA" */
+  location?: string;
+  images?: JournalAttachmentImage[];
+  files?: JournalAttachmentFile[];
+  favorite?: boolean;
 }
 
 interface IdentityContextValue {
@@ -31,6 +46,7 @@ interface IdentityContextValue {
   incrementStreak: () => Promise<number>;
   saveJournalEntry: (entry: JournalEntry) => Promise<void>;
   getJournalEntries: () => Promise<JournalEntry[]>;
+  toggleJournalEntryFavorite: (id: string) => Promise<JournalEntry[]>;
 }
 
 const IdentityContext = createContext<IdentityContextValue | null>(null);
@@ -139,6 +155,21 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const toggleJournalEntryFavorite = useCallback(async (id: string): Promise<JournalEntry[]> => {
+    try {
+      const stored = await AsyncStorage.getItem(KEYS.JOURNAL);
+      const entries: JournalEntry[] = stored ? JSON.parse(stored) : [];
+      const updated = entries.map((entry) =>
+        entry.id === id ? { ...entry, favorite: !entry.favorite } : entry
+      );
+      await AsyncStorage.setItem(KEYS.JOURNAL, JSON.stringify(updated));
+      return updated;
+    } catch (error) {
+      console.error('Failed to toggle journal entry favorite:', error);
+      throw error;
+    }
+  }, []);
+
   const value: IdentityContextValue = {
     identity,
     isOnboarded: identity !== null,
@@ -148,6 +179,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     incrementStreak,
     saveJournalEntry,
     getJournalEntries,
+    toggleJournalEntryFavorite,
   };
 
   return React.createElement(IdentityContext.Provider, { value }, children);

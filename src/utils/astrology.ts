@@ -129,7 +129,7 @@ export function getCardAstrology(card: TarotCard): CardAstrology {
     sign,
     planetName,
     planetGlyph: PLANET_GLYPHS[planetName] ?? null,
-    numeral: card.arcana === 'major' ? (ROMAN_NUMERALS[card.number] ?? String(card.number)) : String(card.number),
+    numeral: ROMAN_NUMERALS[card.number] ?? String(card.number),
     aspects: [
       aspectGroup('Trine', [-4, 4], signIndex),
       aspectGroup('Sextile', [-2, 2], signIndex),

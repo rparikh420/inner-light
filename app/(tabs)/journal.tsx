@@ -1,36 +1,74 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   ScrollView,
+  Image,
   StyleSheet,
   Alert,
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { COLORS, TYPE, S, SCREEN_PADDING, SURFACE, BUTTON, RADIUS } from '../../src/constants/theme';
 import { JOURNAL_PROMPTS, JournalPrompt } from '../../src/data/journal-prompts';
 import GradientBackground from '../../src/components/GradientBackground';
-import { useIdentity, JournalEntry } from '../../src/hooks/useIdentity';
+import {
+  useIdentity,
+  JournalEntry,
+  JournalAttachmentImage,
+  JournalAttachmentFile,
+} from '../../src/hooks/useIdentity';
 import { useSpeechToText } from '../../src/hooks/useSpeechToText';
+import VoiceWave from '../../src/components/VoiceWave';
+import JellyButton from '../../src/components/JellyButton';
+import StreakBadge from '../../src/components/StreakBadge';
+import { WORLD_NAMES } from '../../src/data/world-names';
+import { correctNamesInTranscript } from '../../src/utils/nameCorrection';
+import { getCurrentLocationLabel } from '../../src/utils/location';
 import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
 
+const MAX_IMAGES = 6;
+const MAX_FILES = 4;
+
 export default function JournalScreen() {
-  const { saveJournalEntry, getJournalEntries } = useIdentity();
+  const { identity, saveJournalEntry, getJournalEntries, getStreak, incrementStreak } = useIdentity();
+  const router = useRouter();
 
   const [currentPrompt, setCurrentPrompt] = useState<JournalPrompt>(
     () => getDailyItem(JOURNAL_PROMPTS),
   );
   const [entryText, setEntryText] = useState('');
-  const [pastEntries, setPastEntries] = useState<JournalEntry[]>([]);
+  const [images, setImages] = useState<JournalAttachmentImage[]>([]);
+  const [files, setFiles] = useState<JournalAttachmentFile[]>([]);
   const [saving, setSaving] = useState(false);
   const [entryCounter, setEntryCounter] = useState(0);
+  const [streak, setStreak] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    getStreak().then((value) => { if (mounted) setStreak(value); });
+    return () => { mounted = false; };
+  }, [getStreak]);
 
   // -- voice journaling: dictate the entry instead of typing it --
   const speech = useSpeechToText();
   const dictationBaseRef = useRef('');
   const lastCommittedSeqRef = useRef(0);
+
+  // Bias the recognizer's vocabulary toward names so a spoken entry that
+  // mentions someone — especially the person's own name, which the
+  // recognizer would otherwise have no reason to expect — is more likely to
+  // be transcribed as the name rather than the nearest English-sounding word.
+  // The user's own name (and each of its parts) is given priority by being
+  // listed first.
+  const nameContextualStrings = useMemo(() => {
+    const ownNameParts = (identity?.name ?? '').split(/\s+/).filter(Boolean);
+    return Array.from(new Set([...ownNameParts, identity?.name, ...WORLD_NAMES].filter((n): n is string => !!n)));
+  }, [identity?.name]);
 
   const handleToggleDictation = useCallback(async () => {
     if (speech.isListening) {
@@ -39,8 +77,65 @@ export default function JournalScreen() {
     }
     dictationBaseRef.current = entryText;
     lastCommittedSeqRef.current = speech.resultSeq;
-    await speech.start({ continuous: true, interimResults: true });
-  }, [speech, entryText]);
+    await speech.start({
+      continuous: true,
+      interimResults: true,
+      contextualStrings: nameContextualStrings,
+    });
+  }, [speech, entryText, nameContextualStrings]);
+
+  const handlePickImages = useCallback(async () => {
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) {
+      Alert.alert('limit reached', `you can attach up to ${MAX_IMAGES} images per entry.`);
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('permission needed', 'allow access to your photos to attach images.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsMultipleSelection: true,
+      selectionLimit: remaining,
+      quality: 0.6,
+    });
+
+    if (result.canceled) return;
+    setImages((prev) => [...prev, ...result.assets.map((asset) => ({ uri: asset.uri }))].slice(0, MAX_IMAGES));
+  }, [images.length]);
+
+  const handlePickFiles = useCallback(async () => {
+    const remaining = MAX_FILES - files.length;
+    if (remaining <= 0) {
+      Alert.alert('limit reached', `you can attach up to ${MAX_FILES} files per entry.`);
+      return;
+    }
+
+    const result = await DocumentPicker.getDocumentAsync({
+      multiple: remaining > 1,
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled) return;
+    const picked = result.assets.map((asset) => ({
+      uri: asset.uri,
+      name: asset.name,
+      mimeType: asset.mimeType,
+    }));
+    setFiles((prev) => [...prev, ...picked].slice(0, MAX_FILES));
+  }, [files.length]);
+
+  const removeImage = useCallback((index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const removeFile = useCallback((index: number) => {
+    setFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
 
   // Live-merge the dictated speech into the entry as it's heard.
   // Final results are committed into the running base exactly once — keyed off
@@ -50,8 +145,9 @@ export default function JournalScreen() {
   useEffect(() => {
     if (speech.transcript && speech.resultSeq !== lastCommittedSeqRef.current) {
       lastCommittedSeqRef.current = speech.resultSeq;
+      const corrected = correctNamesInTranscript(speech.transcript, nameContextualStrings);
       const base = dictationBaseRef.current;
-      const merged = base ? `${base} ${speech.transcript}` : speech.transcript;
+      const merged = base ? `${base} ${corrected}` : corrected;
       dictationBaseRef.current = merged;
       setEntryText(merged);
       return;
@@ -61,14 +157,13 @@ export default function JournalScreen() {
       const base = dictationBaseRef.current;
       setEntryText(base ? `${base} ${speech.interimTranscript}` : speech.interimTranscript);
     }
-  }, [speech.transcript, speech.interimTranscript, speech.resultSeq]);
+  }, [speech.transcript, speech.interimTranscript, speech.resultSeq, nameContextualStrings]);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       const entries = await getJournalEntries();
       if (mounted) {
-        setPastEntries(entries);
         setEntryCounter(entries.length);
       }
     })();
@@ -86,25 +181,33 @@ export default function JournalScreen() {
 
     setSaving(true);
     try {
+      const location = await getCurrentLocationLabel();
+
       const newEntry: JournalEntry = {
         id: String(entryCounter + 1),
         date: new Date().toISOString(),
         promptId: currentPrompt.id,
         response: trimmed,
+        ...(location ? { location } : {}),
+        ...(images.length ? { images } : {}),
+        ...(files.length ? { files } : {}),
       };
 
       await saveJournalEntry(newEntry);
+      const nextStreak = await incrementStreak();
 
-      setPastEntries((prev) => [...prev, newEntry]);
       setEntryCounter((prev) => prev + 1);
       setEntryText('');
+      setImages([]);
+      setFiles([]);
+      setStreak(nextStreak);
       Alert.alert('saved', 'your journal entry has been saved.');
     } catch {
       Alert.alert('error', 'failed to save entry. please try again.');
     } finally {
       setSaving(false);
     }
-  }, [entryText, entryCounter, currentPrompt.id, saveJournalEntry]);
+  }, [entryText, entryCounter, currentPrompt.id, saveJournalEntry, incrementStreak, images, files]);
 
   const handleNewPrompt = useCallback(() => {
     let next = getRandomItem(JOURNAL_PROMPTS);
@@ -114,19 +217,9 @@ export default function JournalScreen() {
     setCurrentPrompt(next);
   }, [currentPrompt.id]);
 
-  const recentEntries = pastEntries.slice(-3).reverse();
-
-  const formatDate = useCallback((iso: string): string => {
-    const d = new Date(iso);
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }).toLowerCase();
-  }, []);
-
   return (
     <GradientBackground>
+      <StreakBadge count={streak} />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -185,12 +278,91 @@ export default function JournalScreen() {
           <Text style={[styles.dictateButtonText, speech.isListening && styles.dictateButtonTextActive]}>
             {speech.isListening ? 'listening… tap to stop' : 'speak your entry'}
           </Text>
+          <VoiceWave active={speech.isListening} />
         </Pressable>
 
         {speech.error ? (
           <>
             <View style={{ height: S.xs }} />
             <Text style={styles.dictateError}>{speech.error}</Text>
+          </>
+        ) : null}
+
+        {/* 12px gap */}
+        <View style={{ height: S.sm }} />
+
+        {/* attachments — gallery for images, paperclip for files */}
+        <View style={styles.attachRow}>
+          <Pressable
+            onPress={handlePickImages}
+            style={styles.attachButton}
+            accessibilityRole="button"
+            accessibilityLabel="Add photos to this entry"
+          >
+            <Ionicons name="images-outline" size={18} color={COLORS.fgSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={handlePickFiles}
+            style={styles.attachButton}
+            accessibilityRole="button"
+            accessibilityLabel="Attach files to this entry"
+          >
+            <Ionicons name="attach-outline" size={20} color={COLORS.fgSecondary} />
+          </Pressable>
+          {images.length + files.length > 0 ? (
+            <Text style={styles.attachCount}>
+              {images.length + files.length} attached
+            </Text>
+          ) : null}
+        </View>
+
+        {images.length > 0 ? (
+          <>
+            <View style={{ height: S.sm }} />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.thumbRow}
+            >
+              {images.map((image, index) => (
+                <View key={image.uri} style={styles.thumbWrap}>
+                  <Image source={{ uri: image.uri }} style={styles.thumb} />
+                  <Pressable
+                    onPress={() => removeImage(index)}
+                    style={styles.thumbRemove}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove this photo"
+                  >
+                    <Ionicons name="close" size={12} color={COLORS.fg} />
+                  </Pressable>
+                </View>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
+
+        {files.length > 0 ? (
+          <>
+            <View style={{ height: S.sm }} />
+            <View style={styles.fileList}>
+              {files.map((file, index) => (
+                <View key={file.uri} style={styles.fileChip}>
+                  <Ionicons name="document-outline" size={14} color={COLORS.fgSecondary} />
+                  <Text style={styles.fileChipText} numberOfLines={1}>
+                    {file.name}
+                  </Text>
+                  <Pressable
+                    onPress={() => removeFile(index)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${file.name}`}
+                  >
+                    <Ionicons name="close" size={14} color={COLORS.fgSecondary} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
           </>
         ) : null}
 
@@ -219,23 +391,23 @@ export default function JournalScreen() {
         {/* 64px gap */}
         <View style={{ height: S.xxl }} />
 
-        {/* recent entries */}
-        {recentEntries.length > 0 ? (
-          <View>
-            <View style={styles.rule} />
-            {recentEntries.map((entry, index) => (
-              <View key={entry.id}>
-                {index > 0 && <View style={{ height: S.lg }} />}
-                <Text style={styles.entryDate}>
-                  {formatDate(entry.date)}
-                </Text>
-                <Text style={styles.entryPreview} numberOfLines={2}>
-                  {entry.response}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
+        {/* entry archive & reflection */}
+        <View style={styles.jellyRow}>
+          <JellyButton
+            label="previous entries"
+            icon="albums-outline"
+            tone="accent"
+            onPress={() => router.push('/journal-entries')}
+            style={styles.jellyButton}
+          />
+          <JellyButton
+            label="analyse my patterns"
+            icon="sparkles-outline"
+            tone="purple"
+            onPress={() => router.push('/journal-patterns')}
+            style={styles.jellyButton}
+          />
+        </View>
       </ScrollView>
     </GradientBackground>
   );
@@ -317,20 +489,78 @@ const styles = StyleSheet.create({
     color: COLORS.danger,
   },
 
-  rule: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: COLORS.border,
-    marginBottom: S.lg,
+  attachRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: S.sm,
   },
-
-  entryDate: {
+  attachButton: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+  },
+  attachCount: {
     ...TYPE.secondary,
-    fontSize: 11,
-    marginBottom: S.xs,
+    fontSize: 12,
   },
 
-  entryPreview: {
-    ...TYPE.body,
-    fontSize: 14,
+  thumbRow: {
+    gap: S.sm,
+  },
+  thumbWrap: {
+    position: 'relative',
+  },
+  thumb: {
+    width: 64,
+    height: 64,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+  },
+  thumbRemove: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(13,13,15,0.85)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+  },
+
+  fileList: {
+    gap: S.xs,
+  },
+  fileChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: S.xs,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    backgroundColor: COLORS.surface,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    paddingVertical: 6,
+    paddingHorizontal: S.sm,
+  },
+  fileChipText: {
+    ...TYPE.secondary,
+    fontSize: 12,
+    maxWidth: 180,
+  },
+
+  jellyRow: {
+    gap: S.md,
+  },
+  jellyButton: {
+    justifyContent: 'center',
   },
 });
