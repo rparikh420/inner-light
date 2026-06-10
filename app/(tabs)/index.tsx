@@ -180,16 +180,16 @@ export default function HomeScreen() {
             onPress={() => router.navigate('/(tabs)/tarot')}
           />
           <ActionCard
-            icon="heart-outline"
-            title="Affirm"
-            subtitle="Daily affirmations"
-            onPress={() => router.navigate('/(tabs)/affirmations')}
+            icon="book-outline"
+            title="Reflection"
+            subtitle="Journal & affirmations"
+            onPress={() => router.navigate('/(tabs)/reflection')}
           />
           <ActionCard
-            icon="book-outline"
-            title="Journal"
-            subtitle="Reflect & write"
-            onPress={() => router.navigate('/(tabs)/journal')}
+            icon="flash-outline"
+            title="Action"
+            subtitle="CBT tools & practice"
+            onPress={() => router.navigate('/(tabs)/action')}
           />
         </View>
       </ScrollView>

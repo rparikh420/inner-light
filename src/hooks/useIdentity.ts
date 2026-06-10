@@ -25,6 +25,21 @@ export interface JournalAttachmentFile {
   mimeType?: string;
 }
 
+export interface CbtNotes {
+  /** the writer's own rephrasing of the automatic thought, in their voice rather than the model's */
+  automaticThought?: string;
+  /** the writer's own naming of their core belief, alongside (not replacing) the model's candidates */
+  coreBelief?: string;
+  /** the writer's own gentler reframe, alongside the model's suggestions */
+  reframe?: string;
+  /** evidence the writer adds themselves, appended to the model's "for" list */
+  evidenceForExtra?: string[];
+  /** evidence the writer adds themselves, appended to the model's "against" list */
+  evidenceAgainstExtra?: string[];
+  /** per-distortion verdicts keyed by the distortion's name, so the writer can confirm or wave off each reading */
+  distortionVerdicts?: Record<string, 'confirmed' | 'dismissed'>;
+}
+
 export interface JournalEntry {
   id: string;
   date: string;
@@ -35,6 +50,7 @@ export interface JournalEntry {
   images?: JournalAttachmentImage[];
   files?: JournalAttachmentFile[];
   favorite?: boolean;
+  cbtNotes?: CbtNotes;
 }
 
 interface IdentityContextValue {
@@ -47,6 +63,7 @@ interface IdentityContextValue {
   saveJournalEntry: (entry: JournalEntry) => Promise<void>;
   getJournalEntries: () => Promise<JournalEntry[]>;
   toggleJournalEntryFavorite: (id: string) => Promise<JournalEntry[]>;
+  updateJournalEntryCbtNotes: (id: string, patch: CbtNotes) => Promise<JournalEntry[]>;
 }
 
 const IdentityContext = createContext<IdentityContextValue | null>(null);
@@ -170,6 +187,21 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const updateJournalEntryCbtNotes = useCallback(async (id: string, patch: CbtNotes): Promise<JournalEntry[]> => {
+    try {
+      const stored = await AsyncStorage.getItem(KEYS.JOURNAL);
+      const entries: JournalEntry[] = stored ? JSON.parse(stored) : [];
+      const updated = entries.map((entry) =>
+        entry.id === id ? { ...entry, cbtNotes: { ...entry.cbtNotes, ...patch } } : entry
+      );
+      await AsyncStorage.setItem(KEYS.JOURNAL, JSON.stringify(updated));
+      return updated;
+    } catch (error) {
+      console.error('Failed to update journal entry CBT notes:', error);
+      throw error;
+    }
+  }, []);
+
   const value: IdentityContextValue = {
     identity,
     isOnboarded: identity !== null,
@@ -180,6 +212,7 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     saveJournalEntry,
     getJournalEntries,
     toggleJournalEntryFavorite,
+    updateJournalEntryCbtNotes,
   };
 
   return React.createElement(IdentityContext.Provider, { value }, children);

@@ -13,28 +13,28 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { COLORS, TYPE, S, SCREEN_PADDING, SURFACE, BUTTON, RADIUS } from '../../src/constants/theme';
-import { JOURNAL_PROMPTS, JournalPrompt } from '../../src/data/journal-prompts';
-import GradientBackground from '../../src/components/GradientBackground';
+import { COLORS, TYPE, S, SCREEN_PADDING, SURFACE, BUTTON, RADIUS } from '../constants/theme';
+import { JOURNAL_PROMPTS, JournalPrompt } from '../data/journal-prompts';
+import GradientBackground from '../components/GradientBackground';
 import {
   useIdentity,
   JournalEntry,
   JournalAttachmentImage,
   JournalAttachmentFile,
-} from '../../src/hooks/useIdentity';
-import { useSpeechToText } from '../../src/hooks/useSpeechToText';
-import VoiceWave from '../../src/components/VoiceWave';
-import JellyButton from '../../src/components/JellyButton';
-import StreakBadge from '../../src/components/StreakBadge';
-import { WORLD_NAMES } from '../../src/data/world-names';
-import { correctNamesInTranscript } from '../../src/utils/nameCorrection';
-import { getCurrentLocationLabel } from '../../src/utils/location';
-import { getDailyItem, getRandomItem } from '../../src/utils/shuffle';
+} from '../hooks/useIdentity';
+import { useSpeechToText } from '../hooks/useSpeechToText';
+import VoiceWave from '../components/VoiceWave';
+import JellyButton from '../components/JellyButton';
+import StreakBadge from '../components/StreakBadge';
+import { WORLD_NAMES } from '../data/world-names';
+import { correctNamesInTranscript } from '../utils/nameCorrection';
+import { getCurrentLocationLabel } from '../utils/location';
+import { getDailyItem, getRandomItem } from '../utils/shuffle';
 
 const MAX_IMAGES = 6;
 const MAX_FILES = 4;
 
-export default function JournalScreen() {
+export default function JournalView() {
   const { identity, saveJournalEntry, getJournalEntries, getStreak, incrementStreak } = useIdentity();
   const router = useRouter();
 
@@ -366,8 +366,8 @@ export default function JournalScreen() {
           </>
         ) : null}
 
-        {/* 24px gap */}
-        <View style={{ height: S.lg }} />
+        {/* 16px gap */}
+        <View style={{ height: S.md }} />
 
         {/* action buttons */}
         {entryText.length > 0 ? (
@@ -388,8 +388,8 @@ export default function JournalScreen() {
           <Text style={BUTTON.ghostText}>new prompt</Text>
         </Pressable>
 
-        {/* 64px gap */}
-        <View style={{ height: S.xxl }} />
+        {/* 24px gap — trimmed to leave clearance for the floating reflection switcher */}
+        <View style={{ height: S.lg }} />
 
         {/* entry archive & reflection */}
         <View style={styles.jellyRow}>

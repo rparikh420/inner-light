@@ -10,14 +10,14 @@ import {
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-import { COLORS, TYPE, S, SCREEN_PADDING, RADIUS } from '../../src/constants/theme';
-import { AFFIRMATION_CATEGORIES, Affirmation } from '../../src/data/affirmations';
-import GradientBackground from '../../src/components/GradientBackground';
-import VoiceProgressRing from '../../src/components/VoiceProgressRing';
-import StreakBadge from '../../src/components/StreakBadge';
-import { useIdentity } from '../../src/hooks/useIdentity';
-import { useSpeechToText } from '../../src/hooks/useSpeechToText';
-import { speechMatchRatio } from '../../src/utils/speechMatch';
+import { COLORS, TYPE, S, SCREEN_PADDING, RADIUS } from '../constants/theme';
+import { AFFIRMATION_CATEGORIES, Affirmation } from '../data/affirmations';
+import GradientBackground from '../components/GradientBackground';
+import VoiceProgressRing from '../components/VoiceProgressRing';
+import StreakBadge from '../components/StreakBadge';
+import { useIdentity } from '../hooks/useIdentity';
+import { useSpeechToText } from '../hooks/useSpeechToText';
+import { speechMatchRatio } from '../utils/speechMatch';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const REQUIRED_REPETITIONS = 3;
@@ -25,7 +25,7 @@ const MATCH_THRESHOLD = 0.65;
 
 const ALL_AFFIRMATIONS = AFFIRMATION_CATEGORIES.flatMap((c) => c.affirmations);
 
-export default function AffirmationsScreen() {
+export default function AffirmationsView() {
   const { getStreak, incrementStreak } = useIdentity();
   const [selectedCategoryId, setSelectedCategoryId] = useState(AFFIRMATION_CATEGORIES[0].id);
   const [affirmedIds, setAffirmedIds] = useState<Set<number>>(new Set());

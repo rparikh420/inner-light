@@ -43,6 +43,150 @@ ${entryText}
 }
 
 // ---------------------------------------------------------------------------
+// Per-entry "downward arrow" — traces a surface worry down through layered
+// "if that were true, what would that mean?" questions to the core belief
+// underneath, then reality-checks and reframes it.
+// ---------------------------------------------------------------------------
+
+export interface DownwardArrowEmotion {
+  name: string;
+  intensity: number;
+}
+
+export interface DownwardArrowStep {
+  question: string;
+  answer: string;
+}
+
+export interface DownwardArrowAnalysis {
+  trigger: string;
+  emotions: DownwardArrowEmotion[];
+  automaticThought: string;
+  chain: DownwardArrowStep[];
+  coreBeliefs: string[];
+  evidenceFor: string[];
+  evidenceAgainst: string[];
+  reframes: string[];
+}
+
+const DOWNWARD_ARROW_SCHEMA = {
+  type: 'object',
+  properties: {
+    trigger: { type: 'string', description: 'One plain sentence naming the specific situation that set this off — "what happened?"' },
+    emotions: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'A single emotion word, e.g. "Anxiety".' },
+          intensity: { type: 'integer', description: 'Estimated intensity from 0-100, based on the language and emphasis used.' },
+        },
+        required: ['name', 'intensity'],
+      },
+      description: '1-3 distinct emotions named or strongly implied in the entry, each with an estimated intensity. Never list near-synonyms of the same feeling.',
+    },
+    automaticThought: { type: 'string', description: 'The writer\'s immediate, reflexive interpretation of the trigger — quote or closely paraphrase their own words.' },
+    chain: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          question: { type: 'string', description: 'A downward-arrow probe, e.g. "If that were true, what would be so bad about that?" or "...what would that mean about you?"' },
+          answer: { type: 'string', description: 'A one-sentence answer in the writer\'s plausible voice — each layer should go meaningfully deeper than the last.' },
+        },
+        required: ['question', 'answer'],
+      },
+      description: '3-5 question/answer pairs that walk the automatic thought downward, layer by layer, ending at a global, identity-level statement (e.g. "I\'m not good enough").',
+    },
+    coreBeliefs: { type: 'array', items: { type: 'string' }, description: '1-3 distinct candidate phrasings of the core belief this chain circles (e.g. "I am not good enough", "My worth depends on achievement"). Each phrasing should capture a meaningfully different angle, not a reword of another.' },
+    evidenceFor: { type: 'array', items: { type: 'string' }, description: 'A few short, fair phrases noting any real evidence in the entry that could seem to support the core belief.' },
+    evidenceAgainst: { type: 'array', items: { type: 'string' }, description: 'A few short, fair phrases — grounded in the entry or reasonable inference — that complicate or contradict the core belief. Be genuinely kind here, not dismissive.' },
+    reframes: { type: 'array', items: { type: 'string' }, description: '1-2 gentler, more accurate alternative statements that could stand in for the core belief.' },
+  },
+  required: ['trigger', 'emotions', 'automaticThought', 'chain', 'coreBeliefs', 'evidenceFor', 'evidenceAgainst', 'reframes'],
+};
+
+export async function analyzeDownwardArrow(entryText: string): Promise<DownwardArrowAnalysis> {
+  const prompt = `You are a compassionate, CBT-informed journaling companion guiding someone through the "Downward Arrow" technique — tracing a surface-level worry down to the core belief underneath it, then reality-checking that belief.
+
+Read the diary entry below and walk through the technique on the writer's behalf:
+
+1. Name the specific trigger — what happened.
+2. Name 1-3 distinct emotions present, each with a rough intensity (0-100). Don't list near-synonyms of the same feeling.
+3. Identify the automatic thought — their immediate, reflexive interpretation of the trigger.
+4. Build a downward-arrow chain of 3-5 steps. Each step asks some version of "If that were true, what would be so bad about that?" / "...what would that mean?" / "...what would that mean about you?" — and each answer should go one layer deeper than the last, ending at a global, identity-level statement.
+5. Name 1-3 candidate core beliefs the chain seems to circle — each a genuinely distinct angle, not a reworded repeat of another.
+6. List a few short, fair points of evidence for and against that core belief. Keep "evidence against" genuinely plausible and kind — this is where the relief usually starts.
+7. Offer 1-2 gentler, more accurate reframes of the core belief.
+
+Stay grounded in what's actually written or strongly implied — paraphrase the writer's own words and voice rather than inventing detail. If the entry is too brief or light to support a full chain, keep each layer short and honest rather than padding it out.
+
+Entry:
+"""
+${entryText}
+"""`;
+
+  return generateStructured<DownwardArrowAnalysis>(prompt, DOWNWARD_ARROW_SCHEMA);
+}
+
+// ---------------------------------------------------------------------------
+// Per-entry cognitive distortion check — once an automatic thought has
+// surfaced (via the downward arrow), test it against common thinking traps.
+// ---------------------------------------------------------------------------
+
+export interface CognitiveDistortionFinding {
+  distortion: string;
+  evidence: string;
+  note: string;
+}
+
+export interface CognitiveDistortionAnalysis {
+  findings: CognitiveDistortionFinding[];
+}
+
+const COGNITIVE_DISTORTION_SCHEMA = {
+  type: 'object',
+  properties: {
+    findings: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          distortion: { type: 'string', description: 'The name of a specific thinking trap, e.g. "Catastrophizing", "Mind-reading", "Fortune-telling", "All-or-nothing thinking", "Emotional reasoning".' },
+          evidence: { type: 'string', description: 'A short quote or close paraphrase from the entry showing this pattern in action.' },
+          note: { type: 'string', description: 'One plain, kind sentence on how this interpretation goes beyond what the situation actually shows.' },
+        },
+        required: ['distortion', 'evidence', 'note'],
+      },
+      description: 'Only the thinking traps genuinely present — it is common and healthy for this to contain just one, two, or even none. Do not stretch to fill the list.',
+    },
+  },
+  required: ['findings'],
+};
+
+export async function analyzeCognitiveDistortions(automaticThought: string, entryText: string): Promise<CognitiveDistortionAnalysis> {
+  const prompt = `You are a compassionate, CBT-informed journaling companion. A recent journal entry surfaced this automatic thought:
+
+"${automaticThought}"
+
+Here is the entry it came from, for context:
+"""
+${entryText}
+"""
+
+Gently check this thought against common cognitive distortions — patterns where a thought goes beyond what the situation actually shows:
+- Catastrophizing (assuming the worst-case outcome)
+- Mind-reading (assuming you know what someone else is thinking)
+- Fortune-telling (predicting the future as settled fact)
+- All-or-nothing thinking (collapsing a situation into absolute, binary terms)
+- Emotional reasoning (treating a feeling as proof of a fact)
+
+Only name the ones that genuinely fit this specific thought — it is completely normal, and often a good sign, for a thought to show just one, two, or none of these. For each one that truly fits, point to the specific phrase that reveals it and explain, kindly and plainly, how the interpretation outruns the facts at hand.`;
+
+  return generateStructured<CognitiveDistortionAnalysis>(prompt, COGNITIVE_DISTORTION_SCHEMA);
+}
+
+// ---------------------------------------------------------------------------
 // Cross-entry cognitive schema extraction (core beliefs / dysfunctional
 // assumptions / negative automatic thoughts) — informed by the layered CBT
 // schema model described in arXiv:2403.16008.

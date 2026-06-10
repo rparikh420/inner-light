@@ -38,9 +38,9 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="journal"
+        name="reflection"
         options={{
-          title: 'Journal',
+          title: 'Reflection',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'book' : 'book-outline'}
@@ -51,12 +51,12 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="affirmations"
+        name="action"
         options={{
-          title: 'Affirm',
+          title: 'Action',
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
-              name={focused ? 'heart' : 'heart-outline'}
+              name={focused ? 'flash' : 'flash-outline'}
               size={22}
               color={color}
             />

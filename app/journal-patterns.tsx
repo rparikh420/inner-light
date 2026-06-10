@@ -1,15 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
 import GradientBackground from '../src/components/GradientBackground';
 import JellyButton from '../src/components/JellyButton';
 import { COLORS, RADIUS, S, TYPE } from '../src/constants/theme';
-import { useIdentity, JournalEntry } from '../src/hooks/useIdentity';
+import { useIdentity, JournalEntry, CbtNotes } from '../src/hooks/useIdentity';
 import { JOURNAL_PROMPTS } from '../src/data/journal-prompts';
 import { isGeminiConfigured } from '../src/utils/gemini';
-import { analyzeEntryModalities, HotCrossBunAnalysis } from '../src/utils/journalAnalysis';
+import {
+  analyzeEntryModalities,
+  analyzeDownwardArrow,
+  analyzeCognitiveDistortions,
+  HotCrossBunAnalysis,
+  DownwardArrowAnalysis,
+  CognitiveDistortionAnalysis,
+} from '../src/utils/journalAnalysis';
 
 const WEEKDAY_LABELS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
@@ -24,6 +31,20 @@ const MODALITY_PANES: Array<{
   { key: 'physicalSymptoms', label: 'physical', icon: 'pulse-outline' },
 ];
 
+type AnalysisToggle = 'hotCrossBun' | 'downwardArrow' | 'cognitiveDistortion' | 'myEvidence';
+
+const ANALYSIS_TOGGLES: Array<{
+  key: AnalysisToggle;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  needsCoreBelief?: boolean;
+}> = [
+  { key: 'hotCrossBun', label: 'hot cross', icon: 'sync-outline' },
+  { key: 'downwardArrow', label: 'downward arrow', icon: 'arrow-down-circle-outline' },
+  { key: 'cognitiveDistortion', label: 'distortion check', icon: 'glasses-outline', needsCoreBelief: true },
+  { key: 'myEvidence', label: 'my evidence', icon: 'scale-outline', needsCoreBelief: true },
+];
+
 function dayKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -32,15 +53,129 @@ function monthLabel(date: Date): string {
   return date.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
 }
 
-interface AnalysisState {
+interface AnalysisState<T> {
   status: 'idle' | 'loading' | 'ready' | 'error' | 'unconfigured';
-  data?: HotCrossBunAnalysis;
+  data?: T;
   message?: string;
+}
+
+async function loadAnalysis<T>(
+  entryId: string,
+  setState: React.Dispatch<React.SetStateAction<Record<string, AnalysisState<T>>>>,
+  fetcher: () => Promise<T>,
+) {
+  if (!isGeminiConfigured()) {
+    setState((prev) => ({
+      ...prev,
+      [entryId]: {
+        status: 'unconfigured',
+        message: 'add a Gemini API key (EXPO_PUBLIC_GEMINI_API_KEY) to your .env to unlock this — get a free one at aistudio.google.com/apikey.',
+      },
+    }));
+    return;
+  }
+  setState((prev) => ({ ...prev, [entryId]: { status: 'loading' } }));
+  try {
+    const data = await fetcher();
+    setState((prev) => ({ ...prev, [entryId]: { status: 'ready', data } }));
+  } catch (error) {
+    setState((prev) => ({
+      ...prev,
+      [entryId]: { status: 'error', message: error instanceof Error ? error.message : 'something went wrong reaching the model.' },
+    }));
+  }
+}
+
+function EditableField({
+  value,
+  placeholder,
+  onSave,
+  textStyle,
+}: {
+  value: string;
+  placeholder: string;
+  onSave: (next: string) => void;
+  textStyle?: any;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => {
+    if (!editing) setDraft(value);
+  }, [value, editing]);
+
+  if (editing) {
+    return (
+      <View style={styles.editableEditing}>
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          placeholder={placeholder}
+          placeholderTextColor={COLORS.fgSecondary}
+          multiline
+          autoFocus
+          style={[styles.editableInput, textStyle]}
+        />
+        <View style={styles.editableActions}>
+          <Pressable
+            onPress={() => { setDraft(value); setEditing(false); }}
+            style={styles.editableActionBtn}
+            accessibilityRole="button"
+            accessibilityLabel="cancel edit"
+          >
+            <Ionicons name="close" size={15} color={COLORS.fgSecondary} />
+          </Pressable>
+          <Pressable
+            onPress={() => { onSave(draft.trim()); setEditing(false); }}
+            style={styles.editableActionBtn}
+            accessibilityRole="button"
+            accessibilityLabel="save"
+          >
+            <Ionicons name="checkmark" size={15} color={COLORS.purple} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <Pressable onPress={() => setEditing(true)} style={styles.editableDisplay} accessibilityRole="button" accessibilityLabel={value ? 'edit' : placeholder}>
+      <Text style={[textStyle, !value && styles.editablePlaceholder]}>{value || placeholder}</Text>
+      <Ionicons name="pencil-outline" size={12} color={COLORS.fgSecondary} style={styles.editablePencil} />
+    </Pressable>
+  );
+}
+
+function AddItemRow({ placeholder, onAdd }: { placeholder: string; onAdd: (text: string) => void }) {
+  const [draft, setDraft] = useState('');
+  const submit = () => {
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    onAdd(trimmed);
+    setDraft('');
+  };
+  return (
+    <View style={styles.addItemRow}>
+      <TextInput
+        value={draft}
+        onChangeText={setDraft}
+        placeholder={placeholder}
+        placeholderTextColor={COLORS.fgSecondary}
+        style={styles.addItemInput}
+        onSubmitEditing={submit}
+        returnKeyType="done"
+        blurOnSubmit={false}
+      />
+      <Pressable onPress={submit} style={styles.addItemButton} accessibilityRole="button" accessibilityLabel="add your own">
+        <Ionicons name="add" size={16} color={COLORS.purple} />
+      </Pressable>
+    </View>
+  );
 }
 
 export default function JournalPatternsScreen() {
   const router = useRouter();
-  const { getJournalEntries } = useIdentity();
+  const { getJournalEntries, updateJournalEntryCbtNotes } = useIdentity();
 
   const [entries, setEntries] = useState<JournalEntry[] | null>(null);
   const [monthCursor, setMonthCursor] = useState(() => {
@@ -48,7 +183,10 @@ export default function JournalPatternsScreen() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [analysisByEntry, setAnalysisByEntry] = useState<Record<string, AnalysisState>>({});
+  const [analysisByEntry, setAnalysisByEntry] = useState<Record<string, AnalysisState<HotCrossBunAnalysis>>>({});
+  const [arrowByEntry, setArrowByEntry] = useState<Record<string, AnalysisState<DownwardArrowAnalysis>>>({});
+  const [distortionByEntry, setDistortionByEntry] = useState<Record<string, AnalysisState<CognitiveDistortionAnalysis>>>({});
+  const [activeToggleByEntry, setActiveToggleByEntry] = useState<Record<string, AnalysisToggle>>({});
 
   useEffect(() => {
     getJournalEntries().then(setEntries);
@@ -94,28 +232,40 @@ export default function JournalPatternsScreen() {
     setSelectedKey((current) => (current === key ? null : key));
   };
 
-  const runAnalysis = useCallback(async (entry: JournalEntry) => {
-    if (!isGeminiConfigured()) {
-      setAnalysisByEntry((prev) => ({
-        ...prev,
-        [entry.id]: {
-          status: 'unconfigured',
-          message: 'add a Gemini API key (EXPO_PUBLIC_GEMINI_API_KEY) to your .env to unlock this — get a free one at aistudio.google.com/apikey.',
-        },
-      }));
-      return;
-    }
-    setAnalysisByEntry((prev) => ({ ...prev, [entry.id]: { status: 'loading' } }));
-    try {
-      const data = await analyzeEntryModalities(entry.response);
-      setAnalysisByEntry((prev) => ({ ...prev, [entry.id]: { status: 'ready', data } }));
-    } catch (error) {
-      setAnalysisByEntry((prev) => ({
-        ...prev,
-        [entry.id]: { status: 'error', message: error instanceof Error ? error.message : 'something went wrong reaching the model.' },
-      }));
-    }
-  }, []);
+  const runModalities = useCallback(
+    (entry: JournalEntry) => loadAnalysis(entry.id, setAnalysisByEntry, () => analyzeEntryModalities(entry.response)),
+    [],
+  );
+  const runDownwardArrow = useCallback(
+    (entry: JournalEntry) => loadAnalysis(entry.id, setArrowByEntry, () => analyzeDownwardArrow(entry.response)),
+    [],
+  );
+  const runDistortions = useCallback(
+    (entry: JournalEntry, automaticThought: string) =>
+      loadAnalysis(entry.id, setDistortionByEntry, () => analyzeCognitiveDistortions(automaticThought, entry.response)),
+    [],
+  );
+
+  const setActiveToggle = (entryId: string, toggle: AnalysisToggle) => {
+    setActiveToggleByEntry((prev) => ({ ...prev, [entryId]: toggle }));
+  };
+
+  const persistCbtNotes = useCallback(async (entryId: string, patch: CbtNotes) => {
+    const updated = await updateJournalEntryCbtNotes(entryId, patch);
+    setEntries(updated);
+  }, [updateJournalEntryCbtNotes]);
+
+  const addEvidenceItem = (entry: JournalEntry, side: 'evidenceForExtra' | 'evidenceAgainstExtra', text: string) => {
+    const existing = entry.cbtNotes?.[side] ?? [];
+    persistCbtNotes(entry.id, { [side]: [...existing, text] });
+  };
+
+  const setDistortionVerdict = (entry: JournalEntry, distortion: string, verdict: 'confirmed' | 'dismissed') => {
+    const next = { ...(entry.cbtNotes?.distortionVerdicts ?? {}) };
+    if (next[distortion] === verdict) delete next[distortion];
+    else next[distortion] = verdict;
+    persistCbtNotes(entry.id, { distortionVerdicts: next });
+  };
 
   const renderHeader = () => (
     <View style={styles.header}>
@@ -187,7 +337,7 @@ export default function JournalPatternsScreen() {
 
     if (!state || state.status === 'idle') {
       return (
-        <Pressable onPress={() => runAnalysis(entry)} style={styles.unlockCard} accessibilityRole="button" accessibilityLabel="reveal hot cross bun analysis">
+        <Pressable onPress={() => runModalities(entry)} style={styles.unlockCard} accessibilityRole="button" accessibilityLabel="reveal hot cross bun analysis">
           <Ionicons name="sparkles-outline" size={22} color={COLORS.purple} />
           <Text style={styles.unlockText}>tap to extract thoughts, feelings, behaviors & physical symptoms from this entry</Text>
         </Pressable>
@@ -209,7 +359,7 @@ export default function JournalPatternsScreen() {
           <Ionicons name="key-outline" size={22} color={COLORS.fgSecondary} />
           <Text style={styles.unlockText}>{state.message}</Text>
           {state.status === 'error' && (
-            <Pressable onPress={() => runAnalysis(entry)} style={styles.retryButton}>
+            <Pressable onPress={() => runModalities(entry)} style={styles.retryButton}>
               <Text style={styles.retryText}>try again</Text>
             </Pressable>
           )}
@@ -245,6 +395,339 @@ export default function JournalPatternsScreen() {
     );
   };
 
+  const renderDownwardArrowPane = (entry: JournalEntry) => {
+    const state = arrowByEntry[entry.id];
+
+    if (!state || state.status === 'idle') {
+      return (
+        <Pressable onPress={() => runDownwardArrow(entry)} style={styles.unlockCard} accessibilityRole="button" accessibilityLabel="reveal downward arrow analysis">
+          <Ionicons name="arrow-down-circle-outline" size={22} color={COLORS.purple} />
+          <Text style={styles.unlockText}>tap to trace this entry's automatic thought down to the core belief beneath it</Text>
+        </Pressable>
+      );
+    }
+
+    if (state.status === 'loading') {
+      return (
+        <View style={styles.unlockCard}>
+          <ActivityIndicator color={COLORS.purple} />
+          <Text style={styles.unlockText}>following the thread downward…</Text>
+        </View>
+      );
+    }
+
+    if (state.status === 'unconfigured' || state.status === 'error') {
+      return (
+        <View style={styles.unlockCard}>
+          <Ionicons name="key-outline" size={22} color={COLORS.fgSecondary} />
+          <Text style={styles.unlockText}>{state.message}</Text>
+          {state.status === 'error' && (
+            <Pressable onPress={() => runDownwardArrow(entry)} style={styles.retryButton}>
+              <Text style={styles.retryText}>try again</Text>
+            </Pressable>
+          )}
+        </View>
+      );
+    }
+
+    const data = state.data!;
+    return (
+      <View style={styles.arrowWrap}>
+        <View style={styles.arrowBlock}>
+          <Text style={styles.arrowStepLabel}>1 · trigger</Text>
+          <Text style={styles.arrowStepText}>{data.trigger}</Text>
+        </View>
+
+        <View style={styles.arrowBlock}>
+          <Text style={styles.arrowStepLabel}>2 · what it stirred up</Text>
+          <View style={styles.arrowEmotionRow}>
+            {data.emotions.map((emotion, i) => (
+              <View key={i} style={styles.arrowEmotionChip}>
+                <Text style={styles.arrowEmotionName}>{emotion.name}</Text>
+                <View style={styles.arrowEmotionTrack}>
+                  <View style={[styles.arrowEmotionFill, { width: `${Math.max(6, Math.min(100, emotion.intensity))}%` }]} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.arrowBlock}>
+          <Text style={styles.arrowStepLabel}>3 · automatic thought</Text>
+          <Text style={styles.arrowHintSmall}>here's what the model picked up — tap to put it in your own words</Text>
+          <EditableField
+            value={entry.cbtNotes?.automaticThought ?? ''}
+            placeholder={`"${data.automaticThought}"`}
+            onSave={(next) => persistCbtNotes(entry.id, { automaticThought: next })}
+            textStyle={styles.arrowQuote}
+          />
+        </View>
+
+        <View style={styles.arrowBlock}>
+          <Text style={styles.arrowStepLabel}>4 · the downward arrow</Text>
+          <View style={styles.arrowChain}>
+            {data.chain.map((step, i) => (
+              <View key={i} style={styles.arrowChainStep}>
+                <View style={styles.arrowChainBullet}>
+                  <Text style={styles.arrowChainBulletText}>{i + 1}</Text>
+                </View>
+                <View style={styles.arrowChainBody}>
+                  <Text style={styles.arrowChainQuestion}>{step.question}</Text>
+                  <Text style={styles.arrowChainAnswer}>{step.answer}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        <View style={[styles.arrowBlock, styles.arrowCoreBlock]}>
+          <Text style={styles.arrowStepLabel}>5 · the core belief beneath it</Text>
+          <Text style={styles.arrowHintSmall}>candidates the model noticed:</Text>
+          {data.coreBeliefs.map((belief, i) => (
+            <Text key={i} style={styles.arrowCoreBelief}>"{belief}"</Text>
+          ))}
+          <Text style={styles.arrowOwnLabel}>name it in your own words</Text>
+          <EditableField
+            value={entry.cbtNotes?.coreBelief ?? ''}
+            placeholder="write the belief the way it actually sounds in your head…"
+            onSave={(next) => persistCbtNotes(entry.id, { coreBelief: next })}
+            textStyle={styles.arrowCoreBelief}
+          />
+          <Text style={styles.arrowCoreHint}>once the model surfaces a core belief, the "distortion check" and "my evidence" toggles open up above.</Text>
+        </View>
+      </View>
+    );
+  };
+
+  const renderDistortionPane = (entry: JournalEntry) => {
+    const arrowState = arrowByEntry[entry.id];
+    const aiThought = arrowState?.status === 'ready' ? arrowState.data?.automaticThought : undefined;
+    const automaticThought = entry.cbtNotes?.automaticThought || aiThought;
+    const state = distortionByEntry[entry.id];
+
+    if (!automaticThought) {
+      return (
+        <View style={styles.unlockCard}>
+          <Ionicons name="glasses-outline" size={22} color={COLORS.fgSecondary} />
+          <Text style={styles.unlockText}>find a core belief in "downward arrow" first — this check tests the automatic thought behind it.</Text>
+        </View>
+      );
+    }
+
+    if (!state || state.status === 'idle') {
+      return (
+        <Pressable onPress={() => runDistortions(entry, automaticThought)} style={styles.unlockCard} accessibilityRole="button" accessibilityLabel="check this thought for cognitive distortions">
+          <Ionicons name="glasses-outline" size={22} color={COLORS.purple} />
+          <Text style={styles.unlockText}>tap to check the automatic thought against common thinking traps</Text>
+        </Pressable>
+      );
+    }
+
+    if (state.status === 'loading') {
+      return (
+        <View style={styles.unlockCard}>
+          <ActivityIndicator color={COLORS.purple} />
+          <Text style={styles.unlockText}>checking the thought against the evidence…</Text>
+        </View>
+      );
+    }
+
+    if (state.status === 'unconfigured' || state.status === 'error') {
+      return (
+        <View style={styles.unlockCard}>
+          <Ionicons name="key-outline" size={22} color={COLORS.fgSecondary} />
+          <Text style={styles.unlockText}>{state.message}</Text>
+          {state.status === 'error' && (
+            <Pressable onPress={() => runDistortions(entry, automaticThought)} style={styles.retryButton}>
+              <Text style={styles.retryText}>try again</Text>
+            </Pressable>
+          )}
+        </View>
+      );
+    }
+
+    const data = state.data!;
+    return (
+      <View style={styles.distortionWrap}>
+        <Text style={styles.arrowQuote}>"{automaticThought}"</Text>
+        {data.findings.length ? (
+          data.findings.map((finding, i) => {
+            const verdict = entry.cbtNotes?.distortionVerdicts?.[finding.distortion];
+            return (
+              <View key={i} style={[styles.distortionCard, verdict === 'dismissed' && styles.distortionCardDismissed]}>
+                <View style={styles.distortionHeader}>
+                  <Ionicons name="alert-circle-outline" size={15} color={COLORS.purple} />
+                  <Text style={styles.distortionName}>{finding.distortion}</Text>
+                </View>
+                <Text style={styles.distortionEvidence}>"{finding.evidence}"</Text>
+                <Text style={styles.distortionNote}>{finding.note}</Text>
+                <View style={styles.verdictRow}>
+                  <Pressable
+                    onPress={() => setDistortionVerdict(entry, finding.distortion, 'confirmed')}
+                    style={[styles.verdictBtn, verdict === 'confirmed' && styles.verdictBtnConfirmed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="this resonates"
+                  >
+                    <Ionicons name="checkmark" size={12} color={verdict === 'confirmed' ? COLORS.fg : COLORS.fgSecondary} />
+                    <Text style={[styles.verdictBtnLabel, verdict === 'confirmed' && styles.verdictBtnLabelActive]}>resonates</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setDistortionVerdict(entry, finding.distortion, 'dismissed')}
+                    style={[styles.verdictBtn, verdict === 'dismissed' && styles.verdictBtnDismissed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="not quite"
+                  >
+                    <Ionicons name="close" size={12} color={verdict === 'dismissed' ? COLORS.fg : COLORS.fgSecondary} />
+                    <Text style={[styles.verdictBtnLabel, verdict === 'dismissed' && styles.verdictBtnLabelActive]}>not quite</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })
+        ) : (
+          <View style={styles.distortionCard}>
+            <View style={styles.distortionHeader}>
+              <Ionicons name="checkmark-circle-outline" size={15} color={COLORS.success} />
+              <Text style={styles.distortionName}>no major distortions found</Text>
+            </View>
+            <Text style={styles.distortionNote}>this thought seems to track fairly closely with what's actually there — that's worth noticing too.</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const renderEvidencePane = (entry: JournalEntry) => {
+    const state = arrowByEntry[entry.id];
+    if (!state || state.status !== 'ready' || !state.data) {
+      return (
+        <View style={styles.unlockCard}>
+          <Ionicons name="scale-outline" size={22} color={COLORS.fgSecondary} />
+          <Text style={styles.unlockText}>find a core belief in "downward arrow" first — then weigh the evidence for and against it here.</Text>
+        </View>
+      );
+    }
+
+    const data = state.data;
+    const userEvidenceFor = entry.cbtNotes?.evidenceForExtra ?? [];
+    const userEvidenceAgainst = entry.cbtNotes?.evidenceAgainstExtra ?? [];
+    return (
+      <View style={styles.evidenceWrap}>
+        {entry.cbtNotes?.coreBelief ? (
+          <Text style={styles.arrowCoreBelief}>"{entry.cbtNotes.coreBelief}"</Text>
+        ) : (
+          data.coreBeliefs.map((belief, i) => (
+            <Text key={i} style={styles.arrowCoreBelief}>"{belief}"</Text>
+          ))
+        )}
+        <View style={styles.evidenceColumns}>
+          <View style={styles.evidenceColumn}>
+            <View style={styles.evidenceColumnHeader}>
+              <Ionicons name="add-circle-outline" size={15} color={COLORS.fgSecondary} />
+              <Text style={styles.evidenceColumnLabel}>evidence for</Text>
+            </View>
+            {data.evidenceFor.length ? (
+              data.evidenceFor.map((item, i) => <Text key={i} style={styles.bunItem}>· {item}</Text>)
+            ) : (
+              <Text style={styles.bunEmpty}>nothing solid found</Text>
+            )}
+            {userEvidenceFor.map((item, i) => (
+              <View key={`u-${i}`} style={styles.evidenceUserRow}>
+                <Text style={styles.evidenceUserTag}>you</Text>
+                <Text style={[styles.bunItem, styles.evidenceUserItemText]}>{item}</Text>
+              </View>
+            ))}
+            <AddItemRow placeholder="add your own…" onAdd={(text) => addEvidenceItem(entry, 'evidenceForExtra', text)} />
+          </View>
+          <View style={styles.evidenceColumn}>
+            <View style={styles.evidenceColumnHeader}>
+              <Ionicons name="remove-circle-outline" size={15} color={COLORS.purple} />
+              <Text style={styles.evidenceColumnLabel}>evidence against</Text>
+            </View>
+            {data.evidenceAgainst.length ? (
+              data.evidenceAgainst.map((item, i) => <Text key={i} style={styles.bunItem}>· {item}</Text>)
+            ) : (
+              <Text style={styles.bunEmpty}>nothing notable here</Text>
+            )}
+            {userEvidenceAgainst.map((item, i) => (
+              <View key={`u-${i}`} style={styles.evidenceUserRow}>
+                <Text style={styles.evidenceUserTag}>you</Text>
+                <Text style={[styles.bunItem, styles.evidenceUserItemText]}>{item}</Text>
+              </View>
+            ))}
+            <AddItemRow placeholder="add your own…" onAdd={(text) => addEvidenceItem(entry, 'evidenceAgainstExtra', text)} />
+          </View>
+        </View>
+        <View style={styles.evidenceReframeBlock}>
+          <View style={styles.evidenceColumnHeader}>
+            <Ionicons name="sparkles-outline" size={15} color={COLORS.purple} />
+            <Text style={styles.evidenceColumnLabel}>a gentler reframe</Text>
+          </View>
+          {data.reframes.map((reframe, i) => (
+            <Text key={i} style={styles.evidenceReframe}>"{reframe}"</Text>
+          ))}
+          <Text style={styles.arrowOwnLabel}>or write your own</Text>
+          <EditableField
+            value={entry.cbtNotes?.reframe ?? ''}
+            placeholder="say it the way you'd want to believe it…"
+            onSave={(next) => persistCbtNotes(entry.id, { reframe: next })}
+            textStyle={styles.evidenceReframe}
+          />
+        </View>
+      </View>
+    );
+  };
+
+  const renderToggleRow = (entry: JournalEntry) => {
+    const active = activeToggleByEntry[entry.id] ?? 'hotCrossBun';
+    const arrowState = arrowByEntry[entry.id];
+    const hasCoreBelief = arrowState?.status === 'ready' && !!arrowState.data?.coreBeliefs.length;
+
+    return (
+      <View style={styles.toggleRow}>
+        {ANALYSIS_TOGGLES.map(({ key, label, icon, needsCoreBelief }) => {
+          const locked = !!needsCoreBelief && !hasCoreBelief;
+          const isActive = active === key;
+          return (
+            <Pressable
+              key={key}
+              onPress={() => { if (!locked) setActiveToggle(entry.id, key); }}
+              disabled={locked}
+              style={[styles.toggleChip, isActive && styles.toggleChipActive, locked && styles.toggleChipLocked]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive, disabled: locked }}
+              accessibilityLabel={locked ? `${label} — unlocks once a core belief is found` : label}
+            >
+              <Ionicons
+                name={locked ? 'lock-closed-outline' : icon}
+                size={13}
+                color={isActive ? COLORS.fg : locked ? COLORS.fgSecondary : COLORS.purple}
+              />
+              <Text style={[styles.toggleChipLabel, isActive && styles.toggleChipLabelActive, locked && styles.toggleChipLabelLocked]}>
+                {label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    );
+  };
+
+  const renderActivePane = (entry: JournalEntry) => {
+    const active = activeToggleByEntry[entry.id] ?? 'hotCrossBun';
+    switch (active) {
+      case 'downwardArrow':
+        return renderDownwardArrowPane(entry);
+      case 'cognitiveDistortion':
+        return renderDistortionPane(entry);
+      case 'myEvidence':
+        return renderEvidencePane(entry);
+      case 'hotCrossBun':
+      default:
+        return renderModalityPane(entry);
+    }
+  };
+
   const renderDayDetail = () => {
     if (!selectedKey || !selectedEntries.length) return null;
 
@@ -262,8 +745,9 @@ export default function JournalPatternsScreen() {
               <Text style={styles.detailResponse}>{entry.response}</Text>
 
               <View style={styles.detailDivider} />
-              <Text style={styles.detailSectionLabel}>hot cross bun — this entry, mapped</Text>
-              {renderModalityPane(entry)}
+              <Text style={styles.detailSectionLabel}>this entry, mapped</Text>
+              {renderToggleRow(entry)}
+              {renderActivePane(entry)}
             </View>
           );
         })}
@@ -566,6 +1050,373 @@ const styles = StyleSheet.create({
     ...TYPE.secondary,
     fontSize: 12,
     fontStyle: 'italic',
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: S.xs,
+  },
+  toggleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 6,
+    paddingHorizontal: S.sm,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surfaceHover,
+  },
+  toggleChipActive: {
+    backgroundColor: COLORS.purple,
+    borderColor: COLORS.purple,
+  },
+  toggleChipLocked: {
+    opacity: 0.5,
+  },
+  toggleChipLabel: {
+    ...TYPE.secondary,
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.purple,
+  },
+  toggleChipLabelActive: {
+    color: COLORS.fg,
+  },
+  toggleChipLabelLocked: {
+    color: COLORS.fgSecondary,
+  },
+  arrowWrap: {
+    gap: S.md,
+  },
+  arrowBlock: {
+    gap: 6,
+  },
+  arrowStepLabel: {
+    ...TYPE.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: COLORS.purple,
+  },
+  arrowStepText: {
+    ...TYPE.body,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  arrowQuote: {
+    ...TYPE.body,
+    fontSize: 14,
+    fontStyle: 'italic',
+    lineHeight: 20,
+    color: COLORS.fgSecondary,
+  },
+  arrowEmotionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: S.sm,
+  },
+  arrowEmotionChip: {
+    minWidth: 110,
+    gap: 4,
+  },
+  arrowEmotionName: {
+    ...TYPE.body,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  arrowEmotionTrack: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: COLORS.surfaceHover,
+    overflow: 'hidden',
+  },
+  arrowEmotionFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: COLORS.purple,
+  },
+  arrowChain: {
+    gap: S.sm,
+  },
+  arrowChainStep: {
+    flexDirection: 'row',
+    gap: S.sm,
+  },
+  arrowChainBullet: {
+    width: 22,
+    height: 22,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.purpleSoft,
+  },
+  arrowChainBulletText: {
+    ...TYPE.accent,
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORS.purple,
+  },
+  arrowChainBody: {
+    flex: 1,
+    gap: 2,
+  },
+  arrowChainQuestion: {
+    ...TYPE.body,
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 18,
+    color: COLORS.fgSecondary,
+  },
+  arrowChainAnswer: {
+    ...TYPE.body,
+    fontSize: 14,
+    lineHeight: 19,
+  },
+  arrowCoreBlock: {
+    backgroundColor: COLORS.purpleSoft,
+    borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.purpleBorder,
+    padding: S.md,
+  },
+  arrowCoreBelief: {
+    ...TYPE.heading,
+    fontSize: 15,
+    fontStyle: 'italic',
+    lineHeight: 21,
+  },
+  arrowCoreHint: {
+    ...TYPE.secondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 2,
+  },
+  distortionWrap: {
+    gap: S.sm,
+  },
+  distortionCard: {
+    backgroundColor: COLORS.surfaceHover,
+    borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    padding: S.sm,
+    gap: 4,
+  },
+  distortionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: S.xs,
+  },
+  distortionName: {
+    ...TYPE.body,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  distortionEvidence: {
+    ...TYPE.body,
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 18,
+    color: COLORS.fgSecondary,
+  },
+  distortionNote: {
+    ...TYPE.body,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  evidenceWrap: {
+    gap: S.md,
+  },
+  evidenceColumns: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: S.sm,
+  },
+  evidenceColumn: {
+    flexBasis: '47%',
+    flexGrow: 1,
+    backgroundColor: COLORS.surfaceHover,
+    borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    padding: S.sm,
+    gap: 4,
+  },
+  evidenceColumnHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: S.xs,
+    marginBottom: 2,
+  },
+  evidenceColumnLabel: {
+    ...TYPE.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: COLORS.purple,
+  },
+  evidenceReframeBlock: {
+    backgroundColor: COLORS.purpleSoft,
+    borderRadius: RADIUS.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.purpleBorder,
+    padding: S.sm,
+    gap: 4,
+  },
+  evidenceReframe: {
+    ...TYPE.body,
+    fontSize: 14,
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
+  arrowHintSmall: {
+    ...TYPE.secondary,
+    fontSize: 11,
+    fontStyle: 'italic',
+    lineHeight: 15,
+  },
+  arrowOwnLabel: {
+    ...TYPE.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: COLORS.fgSecondary,
+    marginTop: 4,
+  },
+  editableDisplay: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  editablePencil: {
+    marginTop: 4,
+  },
+  editablePlaceholder: {
+    fontStyle: 'italic',
+    color: COLORS.fgSecondary,
+  },
+  editableEditing: {
+    gap: 6,
+  },
+  editableInput: {
+    ...TYPE.body,
+    fontSize: 14,
+    lineHeight: 20,
+    color: COLORS.fg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.purpleBorder,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surfaceHover,
+    padding: S.sm,
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  editableActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: S.xs,
+  },
+  editableActionBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.surfaceHover,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+  },
+  addItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  addItemInput: {
+    ...TYPE.body,
+    flex: 1,
+    fontSize: 13,
+    color: COLORS.fg,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    borderRadius: RADIUS.pill,
+    backgroundColor: COLORS.surface,
+    paddingVertical: 6,
+    paddingHorizontal: S.sm,
+  },
+  addItemButton: {
+    width: 28,
+    height: 28,
+    borderRadius: RADIUS.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.purpleSoft,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.purpleBorder,
+  },
+  evidenceUserRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+  },
+  evidenceUserTag: {
+    ...TYPE.accent,
+    flexShrink: 0,
+    alignSelf: 'flex-start',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: COLORS.purple,
+    backgroundColor: COLORS.purpleSoft,
+    borderRadius: RADIUS.pill,
+    paddingVertical: 1,
+    paddingHorizontal: 5,
+    marginTop: 3,
+    overflow: 'hidden',
+  },
+  evidenceUserItemText: {
+    flex: 1,
+  },
+  verdictRow: {
+    flexDirection: 'row',
+    gap: S.xs,
+    marginTop: 4,
+  },
+  verdictBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: S.sm,
+    borderRadius: RADIUS.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  verdictBtnConfirmed: {
+    backgroundColor: COLORS.success,
+    borderColor: COLORS.success,
+  },
+  verdictBtnDismissed: {
+    backgroundColor: COLORS.fgSecondary,
+    borderColor: COLORS.fgSecondary,
+  },
+  verdictBtnLabel: {
+    ...TYPE.secondary,
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.fgSecondary,
+  },
+  verdictBtnLabelActive: {
+    color: COLORS.fg,
+  },
+  distortionCardDismissed: {
+    opacity: 0.55,
   },
   deepLink: {
     flexDirection: 'row',
